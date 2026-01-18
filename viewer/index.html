@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>SecondScreen viewer</title><link rel="stylesheet" href="/style.css"><script src="/viewer.js" defer></script></head>
+<body>
+<header><div><strong>SecondScreen</strong><span class="badge">MIRROR</span></div><span id="status" role="status" aria-live="polite">Disconnected</span></header>
+<main>
+<section id="pairing"><p class="eyebrow">YOUR DESKTOP, WITH YOU</p><h1>A little more room<br>for your screen.</h1><p>Enter the pairing code shown on your computer, then approve this tablet on the host.</p>
+<form id="pair-form"><label for="code">Pairing code</label><div class="row"><input id="code" maxlength="10" minlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" required placeholder="10-character code"><button id="connect" type="submit">Pair viewer</button></div></form>
+<p class="notice">Private network only. This preview uses unencrypted HTTP. People on the network may be able to read frames and pairing credentials. Use a trusted Wi-Fi network; never forward the host port to the internet.</p><p id="error" role="alert"></p></section>
+<section id="display" hidden><div id="stage"><img id="screen" alt="Live mirrored desktop"><p id="waiting">Waiting for approval on your computer…</p></div><nav><span id="details">Mirroring • read only</span><button id="fullscreen" type="button">Full screen</button><button id="disconnect" type="button">Disconnect</button></nav></section>
+</main><footer>SecondScreen 0.1.0 · One paired viewer · No touch or keyboard forwarding</footer>
+</body></html>
