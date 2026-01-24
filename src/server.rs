@@ -54,6 +54,7 @@ pub struct Host {
     pub address: SocketAddr,
     pub shared: Arc<Shared>,
     threads: Vec<JoinHandle<()>>,
+    listener_wake: mio::Waker,
 }
 impl Host {
     pub fn start(
@@ -67,6 +68,14 @@ impl Host {
         }
         let listener = TcpListener::bind(address).map_err(|e| format!("Cannot listen: {e}"))?;
         let address = listener.local_addr().map_err(|e| e.to_string())?;
+        listener.set_nonblocking(true).map_err(|e| e.to_string())?;
+        let mut listener = mio::net::TcpListener::from_std(listener);
+        let mut poll = mio::Poll::new().map_err(|e| e.to_string())?;
+        poll.registry()
+            .register(&mut listener, mio::Token(0), mio::Interest::READABLE)
+            .map_err(|e| e.to_string())?;
+        let listener_wake =
+            mio::Waker::new(poll.registry(), mio::Token(1)).map_err(|e| e.to_string())?;
         let shared = Arc::new(Shared {
             state: Mutex::new(State {
                 pairing: Pairing::default(),
@@ -104,21 +113,43 @@ impl Host {
         }
         let accept_shared = shared.clone();
         threads.push(thread::spawn(move || {
-            for socket in listener.incoming() {
+            let mut events = mio::Events::with_capacity(8);
+            loop {
+                if let Err(e) = poll.poll(&mut events, None) {
+                    if e.kind() == std::io::ErrorKind::Interrupted {
+                        continue;
+                    }
+                    let mut s = accept_shared.state.lock().unwrap();
+                    s.error = Some(format!("Listener failed: {e}"));
+                    s.stopped = true;
+                    drop(s);
+                    accept_shared.changed();
+                    break;
+                }
                 if accept_shared.state.lock().unwrap().stopped {
                     break;
                 }
-                match socket {
-                    Ok(socket) => {
-                        let _ = tx.try_send(socket);
-                    } // overload closes connection; no unbounded work
-                    Err(e) => {
-                        let mut s = accept_shared.state.lock().unwrap();
-                        s.error = Some(format!("Listener failed: {e}"));
-                        s.stopped = true;
-                        drop(s);
-                        accept_shared.changed();
-                        break;
+                for event in &events {
+                    if event.token() != mio::Token(0) {
+                        continue;
+                    }
+                    loop {
+                        match listener.accept() {
+                            Ok((socket, _)) => {
+                                let socket: TcpStream = socket.into();
+                                if socket.set_nonblocking(false).is_ok() {
+                                    let _ = tx.try_send(socket);
+                                }
+                            }
+                            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
+                            Err(e) => {
+                                let mut s = accept_shared.state.lock().unwrap();
+                                s.error = Some(format!("Accept failed: {e}"));
+                                drop(s);
+                                accept_shared.changed();
+                                break;
+                            }
+                        }
                     }
                 }
             }
@@ -129,6 +160,7 @@ impl Host {
             address,
             shared,
             threads,
+            listener_wake,
         })
     }
 }
@@ -141,8 +173,8 @@ impl Drop for Host {
             s.frame = None;
         }
         self.shared.changed();
-        // Wake blocking accept without maintaining a periodic polling timer.
-        let _ = TcpStream::connect_timeout(&self.address, Duration::from_millis(200));
+        // Wake the OS selector even when all loopback connections are prohibited.
+        let _ = self.listener_wake.wake();
         for t in self.threads.drain(..) {
             let _ = t.join();
         }
@@ -438,6 +470,117 @@ fn route(request: Request, ip: IpAddr, address: SocketAddr, shared: &Shared) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn synthetic_shared() -> Arc<Shared> {
+        Arc::new(Shared {
+            state: Mutex::new(State {
+                pairing: Pairing::default(),
+                stopped: false,
+                frame: None,
+                error: None,
+            }),
+            wake: Condvar::new(),
+            config: StreamConfig {
+                source: capture::SourceKind::Synthetic,
+                max_width: 320,
+                max_height: 240,
+                ..Default::default()
+            },
+            repaint: Arc::new(|| {}),
+        })
+    }
+    struct ProducerFixture {
+        shared: Arc<Shared>,
+        thread: Option<JoinHandle<()>>,
+    }
+    impl Drop for ProducerFixture {
+        fn drop(&mut self) {
+            self.shared.state.lock().unwrap().stopped = true;
+            self.shared.changed();
+            self.thread.take().unwrap().join().unwrap();
+        }
+    }
+    #[test]
+    fn memory_transport_pairs_approves_decodes_and_revokes_generated_frames() {
+        let shared = synthetic_shared();
+        let source = shared.clone();
+        let _fixture = ProducerFixture {
+            shared: shared.clone(),
+            thread: Some(thread::spawn(move || produce(source))),
+        };
+        let address = "127.0.0.1:7420".parse().unwrap();
+        let ip = "127.0.0.1".parse().unwrap();
+        let exchange = |method: &str,
+                        path: &str,
+                        token: &str,
+                        body: &str,
+                        host: &str,
+                        origin: &str| {
+            let raw = format!(
+                "{method} {path} HTTP/1.1\r\nHost: {host}\r\nOrigin: {origin}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
+                body.len()
+            );
+            let request = read_request(&mut raw.as_bytes()).unwrap();
+            let reply = route(request, ip, address, &shared);
+            let mut bytes = Vec::new();
+            reply.write(&mut bytes).unwrap();
+            bytes
+        };
+        let request = |method: &str, path: &str, token: &str, body: &str| {
+            exchange(
+                method,
+                path,
+                token,
+                body,
+                "127.0.0.1:7420",
+                "http://127.0.0.1:7420",
+            )
+        };
+        assert!(
+            exchange(
+                "GET",
+                "/",
+                "",
+                "",
+                "attacker.invalid:7420",
+                "http://attacker.invalid:7420"
+            )
+            .starts_with(b"HTTP/1.1 403")
+        );
+        assert!(
+            exchange(
+                "GET",
+                "/",
+                "",
+                "",
+                "127.0.0.1:7420",
+                "http://attacker.invalid"
+            )
+            .starts_with(b"HTTP/1.1 403")
+        );
+        assert!(request("GET", "/api/frame", "bad", "").starts_with(b"HTTP/1.1 401"));
+        assert!(shared.state.lock().unwrap().frame.is_none());
+        let code = shared.state.lock().unwrap().pairing.code.clone();
+        let pair = request("POST", "/api/pair", "", &format!("{{\"code\":\"{code}\"}}"));
+        let split = |bytes: &[u8]| bytes.windows(4).position(|p| p == b"\r\n\r\n").unwrap() + 4;
+        let value: serde_json::Value = serde_json::from_slice(&pair[split(&pair)..]).unwrap();
+        let token = value["token"].as_str().unwrap();
+        assert!(request("GET", "/api/frame", token, "").starts_with(b"HTTP/1.1 403"));
+        shared.approve();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let frame = loop {
+            let frame = request("GET", "/api/frame", token, "");
+            if frame.starts_with(b"HTTP/1.1 200") {
+                break frame;
+            }
+            assert!(Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(20));
+        };
+        let decoded = image::load_from_memory(&frame[split(&frame)..]).unwrap();
+        assert_eq!((decoded.width(), decoded.height()), (320, 240));
+        request("POST", "/api/disconnect", token, "");
+        assert!(request("GET", "/api/frame", token, "").starts_with(b"HTTP/1.1 401"));
+        assert!(shared.state.lock().unwrap().frame.is_none());
+    }
     #[test]
     fn rejects_smuggling_oversize_and_truncation() {
         for input in [
@@ -450,6 +593,7 @@ mod tests {
         }
     }
     #[test]
+    #[ignore = "Requires an environment that permits loopback TCP connections; no LAN or real capture"]
     fn loopback_synthetic_transport_requires_pair_and_approval() {
         let host = Host::start(
             SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0),

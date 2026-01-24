@@ -60,7 +60,8 @@ mod tests {
     use super::*;
     #[test]
     fn startup_opt_out_survives_atomic_replacement() {
-        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(".test-output").unwrap();
+        let dir = tempfile::tempdir_in(".test-output").unwrap();
         let file = dir.path().join("settings.json");
         save(&file, &Settings::default()).unwrap();
         let settings = Settings {
