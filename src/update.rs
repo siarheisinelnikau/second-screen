@@ -35,6 +35,7 @@ struct Asset {
 
 fn agent(seconds: u64) -> ureq::Agent {
     ureq::Agent::config_builder()
+        .https_only(true)
         .timeout_global(Some(Duration::from_secs(seconds)))
         .build()
         .into()
@@ -118,7 +119,7 @@ pub fn verify(path: &Path, digest: &str) -> Result<(), String> {
     }
     let mut file = fs::File::open(path).map_err(|e| e.to_string())?;
     let size = file.metadata().map_err(|e| e.to_string())?.len();
-    if size < 64 || size > MAX_DOWNLOAD {
+    if !(64..=MAX_DOWNLOAD).contains(&size) {
         return Err("Invalid executable size".into());
     }
     let mut hasher = Sha256::new();
@@ -183,7 +184,7 @@ pub fn download(
             .header("User-Agent", "SecondScreen/0.1.0")
             .call()
             .map_err(|e| e.to_string())?;
-        let reader = response.body_mut().as_reader();
+        let mut reader = response.body_mut().as_reader();
         let mut total = 0;
         let mut buffer = [0; 65536];
         loop {
@@ -222,6 +223,7 @@ pub fn launch_helper(staged: &Path, digest: &str) -> Result<(), String> {
         ".second-screen-helper-{}.exe",
         crate::pairing::secret()
     ));
+    let ready = folder.join(format!(".second-screen-ready-{}", crate::pairing::secret()));
     fs::copy(&executable, &helper).map_err(|e| e.to_string())?;
     let result = std::process::Command::new(&helper)
         .arg("--apply-update")
@@ -229,13 +231,31 @@ pub fn launch_helper(staged: &Path, digest: &str) -> Result<(), String> {
         .arg(&executable)
         .arg(staged)
         .arg(digest)
+        .arg(&ready)
         .creation_flags(0x08000000)
         .spawn()
         .map_err(|e| format!("Cannot start update helper: {e}"));
     if result.is_err() {
-        let _ = fs::remove_file(helper);
+        let _ = fs::remove_file(&helper);
     }
-    result.map(|_| ())
+    let mut child = result?;
+    let started = std::time::Instant::now();
+    while started.elapsed() < Duration::from_secs(15) {
+        if ready.exists() {
+            let _ = fs::remove_file(&ready);
+            return Ok(());
+        }
+        if child.try_wait().map_err(|e| e.to_string())?.is_some() {
+            let _ = fs::remove_file(&helper);
+            return Err("Update helper exited before it was ready. See update-error.txt in the settings folder.".into());
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    let _ = fs::remove_file(&ready);
+    let _ = fs::remove_file(&helper);
+    Err("Update helper did not become ready; installation was cancelled".into())
 }
 #[cfg(not(windows))]
 pub fn launch_helper(_: &Path, _: &str) -> Result<(), String> {
@@ -253,7 +273,7 @@ pub fn apply_helper(args: &[String]) -> Result<(), String> {
             QueryFullProcessImageNameW, WaitForSingleObject,
         },
     };
-    if args.len() != 4 {
+    if args.len() != 5 {
         return Err("Invalid updater arguments".into());
     }
     let pid: u32 = args[0].parse().map_err(|_| "Invalid parent process")?;
@@ -261,6 +281,18 @@ pub fn apply_helper(args: &[String]) -> Result<(), String> {
     let staged = fs::canonicalize(&args[2]).map_err(|e| e.to_string())?;
     let helper = fs::canonicalize(std::env::current_exe().map_err(|e| e.to_string())?)
         .map_err(|e| e.to_string())?;
+    let ready = PathBuf::from(&args[4]);
+    let ready_parent = ready.parent().and_then(|p| fs::canonicalize(p).ok());
+    if ready_parent.as_deref() != target.parent()
+        || !ready
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .starts_with(".second-screen-ready-")
+        || ready.exists()
+    {
+        return Err("Invalid helper readiness path".into());
+    }
     if staged.parent() != target.parent()
         || helper.parent() != target.parent()
         || !staged
@@ -296,6 +328,15 @@ pub fn apply_helper(args: &[String]) -> Result<(), String> {
         if process_path.as_ref() != Some(&target) {
             CloseHandle(process);
             return Err("Parent process does not match the installed executable".into());
+        }
+        if let Err(e) = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&ready)
+            .and_then(|mut f| f.write_all(b"ready"))
+        {
+            CloseHandle(process);
+            return Err(format!("Cannot signal update readiness: {e}"));
         }
         let waited = WaitForSingleObject(process, 30000);
         CloseHandle(process);
@@ -375,7 +416,8 @@ mod tests {
     }
     #[test]
     fn corrupt_download_is_rejected_without_touching_target() {
-        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(".test-output").unwrap();
+        let dir = tempfile::tempdir_in(".test-output").unwrap();
         let path = dir.path().join("fixture.exe");
         fs::write(&path, [42u8; 128]).unwrap();
         assert!(verify(&path, &"0".repeat(64)).is_err());

@@ -161,4 +161,21 @@ mod tests {
                 .contains("expired")
         );
     }
+    #[test]
+    fn pending_approval_has_a_fixed_deadline_despite_heartbeats() {
+        let now = Instant::now();
+        let ip = "127.0.0.1".parse().unwrap();
+        let mut p = Pairing::new(now);
+        let token = p.pair(&p.code.clone(), ip, now).unwrap();
+        for second in [10, 20, 30, 40, 50, 60] {
+            assert_eq!(
+                p.authenticate(&token, ip, now + Duration::from_secs(second)),
+                Some(false)
+            );
+        }
+        assert_eq!(
+            p.authenticate(&token, ip, now + Duration::from_secs(61)),
+            None
+        );
+    }
 }
