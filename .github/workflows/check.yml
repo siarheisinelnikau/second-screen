@@ -1,0 +1,24 @@
+name: Check
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --locked --all-targets -j 2 -- -D warnings
+      - run: cargo test --locked -j 2
+      - run: node --test tests/viewer.test.cjs
+      - run: ./scripts/package.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SecondScreen-windows-portable
+          path: dist/
