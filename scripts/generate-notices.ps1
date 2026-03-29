@@ -37,6 +37,8 @@ try {
             if (Test-Path -LiteralPath $directory) { $files += @(Get-ChildItem -LiteralPath $directory -Recurse -File | Where-Object { $_.Name -match '(LICENSE|LICENCE|COPYING|NOTICE|OFL)' -and $_.Length -lt 100000 }) }
         }
         if ($files.Count -eq 0) { $missing += "$($package.name) $($package.version)"; [void]$notice.AppendLine('No standalone license text was bundled in this crate; consult the upstream SPDX terms and source before distribution.') }
+        $fonts = Join-Path $folder 'fonts'
+        if (Test-Path -LiteralPath $fonts) { $files += @(Get-ChildItem -LiteralPath $fonts -File -Filter '*.txt' | Sort-Object Name) }
         foreach ($file in $files) {
             [void]$notice.AppendLine()
             [void]$notice.AppendLine("License file: $($file.Name)")

@@ -28,7 +28,7 @@ node --test tests/viewer.test.cjs
 
 Omit `-Offline` on a clean development computer that needs dependencies. The repository configuration limits Cargo to two jobs and keeps build output in its own `target` directory. Packaging links the MSVC runtime statically and produces `dist/SecondScreen-v0.1.0.exe` and `dist/SHA256SUMS`. No installer, service or display driver is included. The executable embeds the viewer; ship the accompanying license notices as well.
 
-`./scripts/generate-notices.ps1 -Offline` regenerates the locked Windows dependency inventory and available license texts. The inventory explicitly marks upstream archives missing standalone texts. Resolve those notices (including bundled fonts) before public distribution; this local build is not a publication-ready release.
+`./scripts/generate-notices.ps1 -Offline` regenerates the locked Windows dependency inventory and available code/font license texts. The inventory explicitly marks upstream archives missing standalone code-license texts. Resolve those notices and review font attribution before public distribution; this local build is not a publication-ready release.
 
 ## Use after manual validation
 
@@ -64,3 +64,5 @@ cargo test --locked --lib loopback_synthetic_transport -- --ignored --nocapture
 ```
 
 That command uses only loopback and synthetic pixels, never LAN binding or screen capture. Compilation alone does not establish Windows capture, browser compatibility, idle CPU use or installation correctness. See [validation status](docs/VALIDATION.md), [architecture](docs/ARCHITECTURE.md), [release-note draft](docs/RELEASE_NOTES.md), and [third-party notices](THIRD_PARTY_NOTICES.md).
+
+The local release build succeeded (8,125,440-byte EXE). `python scripts/inspect_pe.py dist/SecondScreen-v0.1.0.exe` verifies the x64 GUI PE headers, import table and digest without executing it. Python is only an optional development verification tool. A separate opt-in shutdown test passed with a synthetic loopback listener and no client connection.
