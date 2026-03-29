@@ -6,9 +6,12 @@ Implementation session: 2026-10-31. The user authorized code, builds and focused
 
 - Offline dependency resolution with `Cargo.lock` and repository-local build output; Cargo is limited to two jobs.
 - `cargo clippy --locked --offline --all-targets -j 2 -- -D warnings`: passed, including the native event-loop adapter.
-- `cargo test --locked --offline -j 2`: nine Rust tests passed, one loopback test intentionally ignored. The tests cover moving synthetic JPEG encode/decode, complete in-memory HTTP frame delivery, pairing and host approval, IP binding, token revocation, idle/code/approval expiry, brute-force throttling, request bounds and cross-origin/Host rejection, numeric version/asset selection, corrupted download rejection and persisted startup opt-out.
+- `cargo test --locked --offline -j 2`: nine Rust tests passed, two loopback tests intentionally ignored by default. The tests cover moving synthetic JPEG encode/decode, complete in-memory HTTP frame delivery, pairing and host approval, IP binding, token revocation, idle/code/approval expiry, brute-force throttling, request bounds and cross-origin/Host rejection, numeric version/asset selection, corrupted download rejection and persisted startup opt-out.
 - `node --test tests/viewer.test.cjs`: two artificial-DOM tests passed. They exercise the approval gate, in-memory bearer header, image cleanup after revocation and a failed pairing request.
 - `node --check viewer/viewer.js`: passed.
+- `cargo test --locked --offline -j 2 --lib loopback_listener_stops_without_connecting_to_itself -- --ignored --nocapture`: passed. A synthetic-only listener bound to `127.0.0.1:0` stopped immediately without any client/self-connection. No frame capture or LAN binding occurs in this test.
+- `./scripts/package.ps1 -Offline`: passed. The optimized, statically linked MSVC runtime build produced `dist/SecondScreen-v0.1.0.exe` (8,125,440 bytes).
+- `python scripts/inspect_pe.py dist/SecondScreen-v0.1.0.exe --output dist/verification.json`: passed without executing the EXE. Confirmed PE32+, x64, Windows GUI subsystem, no dynamic MSVC runtime imports. SHA-256: `9b1d5c77bdd128f4257956ab2e71546dd931d10b1ba70f25fcd350048706bc2a`, matching `dist/SHA256SUMS`.
 
 The full in-memory transport test invokes the real HTTP parser, router, response writer, synthetic capture worker, JPEG encoder and decoder. It does not use a simulated success response for authorization. None of these checks captures a real display.
 
@@ -16,7 +19,7 @@ The full in-memory transport test invokes the real HTTP parser, router, response
 
 - A real loopback TCP connection failed with Windows socket error 10013 (permission denied). The test listener was bound to `127.0.0.1:0`, never to LAN. No approval/elevation was requested. The opt-in test remains in source for an unrestricted environment.
 - Atomic replacement of a test settings file in the system temporary directory was denied with OS error 5. The test now uses isolated `.test-output` fixtures inside this repository and passes there.
-- The first shutdown implementation depended on a self-connection to wake `accept`. The denied connection exposed a shutdown hang; it was replaced with a `mio` selector and explicit waker. No self-connection is now needed for stopping the server. A real selector/socket shutdown check remains part of the opt-in test.
+- The first shutdown implementation depended on a self-connection to wake `accept`. The denied connection exposed a shutdown hang; it was replaced with a `mio` selector and explicit waker. The separate opt-in listener shutdown check now passes without making any connection. Full TCP frame transfer still needs an unrestricted environment.
 - The offline cache did not contain winit's optional default Linux decoration dependency. Direct winit uses the same minimal feature set as eframe instead; no dependency installation was needed.
 
 ## Manual checks still required
@@ -28,6 +31,6 @@ The full in-memory transport test invokes the real HTTP parser, router, response
 5. Measure release-build idle CPU with sharing off, listener idle, pending peer and streaming. Check pointer/window responsiveness and screen-to-tablet latency. There are no measured performance or latency claims.
 6. With a disposable application folder and a future actual canonical release, validate startup update check, persistent opt-out with zero startup requests, manual check errors/rate limits, incompatible/missing assets, checksum failure, interrupted downloads, unwritable directories, helper readiness, replacement, rollback, backup recovery and relaunch. The updater has not been run.
 7. Follow the virtual-display guide on a dedicated test machine before adding or advertising extension. No driver/device verification was performed here.
-8. Review the generated third-party inventory before public distribution. Some upstream crate archives omit standalone license texts; the inventory identifies these gaps explicitly rather than inventing copyright notices. Complete those upstream notices and the bundled font attribution before publication.
+8. Review the generated third-party inventory before public distribution. Fourteen upstream crate archives omit standalone code-license texts; the inventory identifies these gaps explicitly rather than inventing copyright notices. Complete those upstream notices before publication. The locally available Hack, Noto Emoji, Ubuntu and emoji-icon font license texts are included in the inventory; review their attribution with the final asset.
 
 CI is prepared for Windows formatting, Clippy, default artificial-data tests, viewer tests and static-runtime packaging. It performs no publication. Run the opt-in loopback test separately on a machine where local sockets are allowed.

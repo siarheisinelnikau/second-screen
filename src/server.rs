@@ -593,6 +593,22 @@ mod tests {
         }
     }
     #[test]
+    #[ignore = "Binds a synthetic-only loopback listener; run explicitly when socket binding is permitted"]
+    fn loopback_listener_stops_without_connecting_to_itself() {
+        let host = Host::start(
+            SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0),
+            StreamConfig {
+                source: capture::SourceKind::Synthetic,
+                ..Default::default()
+            },
+            Arc::new(|| {}),
+        )
+        .unwrap();
+        let started = Instant::now();
+        drop(host);
+        assert!(started.elapsed() < Duration::from_secs(3));
+    }
+    #[test]
     #[ignore = "Requires an environment that permits loopback TCP connections; no LAN or real capture"]
     fn loopback_synthetic_transport_requires_pair_and_approval() {
         let host = Host::start(
