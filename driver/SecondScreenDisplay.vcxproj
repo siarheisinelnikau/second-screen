@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64"><Configuration>Debug</Configuration><Platform>x64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{08FA3093-47D2-4A12-A76A-4EED6E631A37}</ProjectGuid>
+    <RootNamespace>SecondScreenDisplay</RootNamespace>
+    <WindowsTargetPlatformVersion Condition="'$(WindowsTargetPlatformVersion)'==''">10.0.26100.0</WindowsTargetPlatformVersion>
+    <Configuration Condition="'$(Configuration)'==''">Release</Configuration>
+    <Platform Condition="'$(Platform)'==''">x64</Platform>
+    <PlatformToolset>WindowsUserModeDriver10.0</PlatformToolset>
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UMDF_VERSION_MAJOR>2</UMDF_VERSION_MAJOR><UMDF_VERSION_MINOR>25</UMDF_VERSION_MINOR>
+    <IndirectDisplayDriver>true</IndirectDisplayDriver>
+    <IDDCX_VERSION_MAJOR>1</IDDCX_VERSION_MAJOR><IDDCX_VERSION_MINOR>4</IDDCX_VERSION_MINOR>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Debug'">true</UseDebugLibraries>
+    <UseDebugLibraries Condition="'$(Configuration)'!='Debug'">false</UseDebugLibraries>
+    <Driver_SpectreMitigation>Spectre</Driver_SpectreMitigation>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup>
+    <OutDir>$(MSBuildThisFileDirectory)..\target\driver\$(Configuration)\</OutDir>
+    <IntDir>$(MSBuildThisFileDirectory)..\target\driver\obj\$(Configuration)\</IntDir>
+    <TargetName>SecondScreenDisplay</TargetName>
+    <SignMode>Off</SignMode><EnableInf2Cat>false</EnableInf2Cat>
+    <Inf2CatUseLocalTime>false</Inf2CatUseLocalTime>
+    <DriverVer_DriverVersion>0.2.0.0</DriverVer_DriverVersion>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <LanguageStandard>stdcpp17</LanguageStandard><ExceptionHandling>Sync</ExceptionHandling>
+      <WarningLevel>Level4</WarningLevel><PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WppEnabled>false</WppEnabled>
+      <PreprocessorDefinitions>UMDF_DRIVER;NOMINMAX;_WIN32_WINNT=0x0A00;IDDCX_VERSION_MAJOR=1;IDDCX_VERSION_MINOR=4;IDDCX_MINIMUM_VERSION_REQUIRED=4;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link><AdditionalDependencies>d3d11.lib;dxgi.lib;OneCoreUAP.lib;%(AdditionalDependencies)</AdditionalDependencies></Link>
+  </ItemDefinitionGroup>
+  <ItemGroup><ClCompile Include="Driver.cpp" /><ClCompile Include="GpuReadback.cpp" /></ItemGroup>
+  <ItemGroup><ClInclude Include="Protocol.hpp" /><ClInclude Include="FrameMailbox.hpp" /><ClInclude Include="GpuReadback.hpp" /></ItemGroup>
+  <ItemGroup><Inf Include="SecondScreenDisplay.inf" /><FilesToPackage Include="$(TargetPath)" /></ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

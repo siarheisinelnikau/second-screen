@@ -230,10 +230,10 @@ impl App {
     }
     fn host_ui(&mut self, ui: &mut egui::Ui) {
         ui.heading("Your tablet. A familiar view.");
-        ui.label("Share your primary monitor with one paired browser on your local network.");
+        ui.label("Share a desktop source with one paired browser on your local network.");
         ui.colored_label(
             egui::Color32::from_rgb(106, 229, 189),
-            "MIRRORING ONLY  ·  READ ONLY",
+            format!("{}  ·  READ ONLY", self.settings.stream.source.mode_label()),
         );
         ui.separator();
         if let Some(shared) = self.shared.clone() {
@@ -273,7 +273,12 @@ impl App {
                         "Waiting for your approval"
                     }
                 ));
-                if !approved && ui.button("Approve viewer and start capture").clicked() {
+                let approval = if self.settings.stream.source == SourceKind::VirtualDisplay {
+                    "Approve viewer and create virtual monitor"
+                } else {
+                    "Approve viewer and start capture"
+                };
+                if !approved && ui.button(approval).clicked() {
                     shared.approve();
                 }
                 if ui.button("Disconnect viewer / rotate code").clicked() {
@@ -312,9 +317,11 @@ impl App {
             ui.add_enabled_ui(!self.busy, |ui| {
                 egui::Grid::new("stream-settings").spacing([20.0, 12.0]).show(ui, |ui| {
                     ui.label("Source");
-                    egui::ComboBox::from_id_salt("source").selected_text(if self.settings.stream.source == SourceKind::PrimaryMonitor { "Primary monitor" } else { "Synthetic test pattern" }).show_ui(ui, |ui| {
+                    egui::ComboBox::from_id_salt("source").selected_text(self.settings.stream.source.mode_label()).show_ui(ui, |ui| {
                         ui.selectable_value(&mut self.settings.stream.source, SourceKind::PrimaryMonitor, "Primary monitor");
                         ui.selectable_value(&mut self.settings.stream.source, SourceKind::Synthetic, "Synthetic test pattern");
+                        #[cfg(all(windows, feature = "virtual-display"))]
+                        ui.selectable_value(&mut self.settings.stream.source, SourceKind::VirtualDisplay, "Virtual display (experimental; driver required)");
                     }); ui.end_row();
                     ui.label("Listen IPv4"); ui.text_edit_singleline(&mut self.settings.bind_ip); ui.end_row();
                     ui.label("Port"); ui.add(egui::DragValue::new(&mut self.settings.port).range(1..=65535)); ui.end_row();
@@ -323,6 +330,9 @@ impl App {
                     ui.label("JPEG quality"); ui.add(egui::Slider::new(&mut self.settings.stream.quality, 30..=90)); ui.end_row();
                     ui.label("Frame rate limit"); ui.add(egui::Slider::new(&mut self.settings.stream.fps, 5..=20).suffix(" fps")); ui.end_row();
                 });
+                if self.settings.stream.source == SourceKind::VirtualDisplay {
+                    ui.colored_label(egui::Color32::YELLOW, "Requires the separately built and installed SecondScreen driver. After approval, select Extend for the new monitor in Windows Display settings. This app never installs a driver or changes your desktop arrangement automatically. Driver/device validation is pending.");
+                }
                 ui.label("Enter your computer's private LAN IPv4 to reach it from a tablet. The default 127.0.0.1 is local only. Display aspect ratio is preserved; settings apply on the next start.");
                 ui.colored_label(egui::Color32::from_rgb(223, 194, 132), "Unencrypted HTTP: frames and credentials can be read on the network.");
                 ui.checkbox(&mut self.trusted_network, "I am using a trusted private network and understand this limitation");
@@ -442,8 +452,8 @@ impl eframe::App for App {
                     1 => self.update_ui(ui),
                     _ => {
                         ui.heading("Room for another perspective.");
-                        ui.label("SecondScreen is an independent, open-source local desktop mirror. No account, cloud relay, driver or remote input.");
-                        ui.label("Extended desktop is not implemented. A real virtual monitor requires an IddCx/UMDF display driver with signing, deployment and hardware validation. This build does not create or configure Windows displays.");
+                        ui.label("SecondScreen is an independent, open-source local desktop viewer. No account, cloud relay or remote input.");
+                        ui.label("Primary monitor mode mirrors an existing screen. The experimental virtual-display backend requires a separately built, signed and installed SecondScreen IddCx/UMDF driver. It creates a monitor only after explicit pairing/approval and removes it on disconnect. End-to-end driver validation is pending; Windows desktop arrangement is never changed automatically.");
                         ui.label("The capture path and tablet compatibility still require manual validation. GDI may not capture protected content, the secure desktop or the cursor.");
                         ui.label(format!("Version {VERSION} · MIT License"));
                         ui.hyperlink_to("Project repository (planned; may be unavailable)", "https://github.com/siarheisinelnikau/second-screen");

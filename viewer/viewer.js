@@ -14,6 +14,8 @@ function reset(message = "Disconnected") {
   clearFrame();
   $("pairing").hidden = false; $("display").hidden = true;
   $("status").textContent = message; $("connect").disabled = false;
+  $("mode").textContent = "VIEWER";
+  $("waiting").textContent = "Waiting for approval on your computer…";
 }
 async function api(path, options = {}) {
   const headers = { ...options.headers };
@@ -46,6 +48,11 @@ async function stream() {
       state = await (await api("/api/state")).json();
       nextState = started + 1000;
       if (state.error) throw new Error(state.error);
+      $("mode").textContent = state.mode || "Mirroring";
+      if (state.hasFrame === false) {
+        clearFrame(); $("waiting").hidden = false;
+        $("waiting").textContent = !state.approved ? "Waiting for approval on your computer…" : state.source === "VirtualDisplay" ? "Waiting for virtual desktop output. Enable Extend in Windows Display settings." : "Waiting for the first desktop frame…";
+      }
     }
     if (!state.approved) { await delay(500); continue; }
     const response = await api(`/api/frame?after=${after}`);
@@ -60,8 +67,10 @@ async function stream() {
       clearFrame(); objectUrl = url; $("screen").src = url;
       after = Number(response.headers.get("X-Frame-Sequence"));
       $("waiting").hidden = true;
-      $("status").textContent = "Connected · Mirroring";
-      $("details").textContent = `${image.naturalWidth} × ${image.naturalHeight} · ${state.source === "Synthetic" ? "Synthetic test pattern" : "Primary monitor"} · read only`;
+      $("status").textContent = `Connected · ${state.mode || "Mirroring"}`;
+      const sourceLabel = state.source === "Synthetic" ? "Synthetic test pattern" : state.source === "VirtualDisplay" ? "Virtual display (experimental)" : "Primary monitor";
+      $("screen").alt = `${sourceLabel} desktop`;
+      $("details").textContent = `${image.naturalWidth} × ${image.naturalHeight} · ${sourceLabel} · read only`;
     }
     await delay(Math.max(0, 1000 / state.fps - (performance.now() - started)));
   }

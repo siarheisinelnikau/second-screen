@@ -1,4 +1,4 @@
-param([switch]$Offline)
+param([switch]$Offline, [switch]$VirtualDisplay)
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 Push-Location -LiteralPath $repo
@@ -11,6 +11,7 @@ try {
     $version = ($metadata.packages | Where-Object name -eq 'second-screen').version
     $buildArgs = @('build', '--release', '--locked', '--target', 'x86_64-pc-windows-msvc', '-j', '2', '--config', 'target.x86_64-pc-windows-msvc.rustflags=["-C","target-feature=+crt-static"]')
     if ($Offline) { $buildArgs += '--offline' }
+    if ($VirtualDisplay) { $buildArgs += @('--features', 'virtual-display') }
     & cargo @buildArgs
     if ($LASTEXITCODE -ne 0) { throw 'Release build failed' }
     $dist = Join-Path $repo 'dist'

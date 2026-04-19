@@ -1,0 +1,19 @@
+name: Unsigned WDK driver build
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    # An explicitly provisioned builder; this workflow never installs a WDK or driver.
+    runs-on: [self-hosted, Windows, X64, wdk]
+    steps:
+      - uses: actions/checkout@v4
+      - shell: pwsh
+        run: ./scripts/build-driver.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SecondScreenDisplay-unsigned
+          path: |
+            target/driver/Release/**/*.dll
+            target/driver/Release/**/*.inf
