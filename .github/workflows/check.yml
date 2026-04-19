@@ -16,6 +16,10 @@ jobs:
       - run: cargo fmt --all -- --check
       - run: cargo clippy --locked --all-targets -j 2 -- -D warnings
       - run: cargo test --locked -j 2
+      - run: cargo clippy --locked --all-targets --features virtual-display -j 2 -- -D warnings
+      - run: cargo test --locked --features virtual-display -j 2
+      - run: ./scripts/test-driver-core.ps1
+      - run: cargo test --locked --features virtual-display -j 2 decodes_actual_cpp_mailbox_fixture -- --ignored
       - run: node --test tests/viewer.test.cjs
       - run: ./scripts/package.ps1
       - run: python scripts/inspect_pe.py (Get-ChildItem dist -Filter 'SecondScreen-v*.exe' | Select-Object -First 1).FullName --output dist/verification.json

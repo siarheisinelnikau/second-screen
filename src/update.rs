@@ -92,7 +92,10 @@ pub fn select_release(json: &[u8], installed: &str) -> Result<Option<Available>,
 pub fn check() -> Result<Option<Available>, String> {
     let mut response = agent(15)
         .get(API)
-        .header("User-Agent", "SecondScreen/0.1.0")
+        .header(
+            "User-Agent",
+            concat!("SecondScreen/", env!("CARGO_PKG_VERSION")),
+        )
         .header("Accept", "application/vnd.github+json")
         .call()
         .map_err(|e| {
@@ -181,7 +184,10 @@ pub fn download(
             })?;
         let mut response = agent(180)
             .get(&update.url)
-            .header("User-Agent", "SecondScreen/0.1.0")
+            .header(
+                "User-Agent",
+                concat!("SecondScreen/", env!("CARGO_PKG_VERSION")),
+            )
             .call()
             .map_err(|e| e.to_string())?;
         let mut reader = response.body_mut().as_reader();

@@ -1,0 +1,55 @@
+; Source package only: building this file never installs or signs the driver.
+[Version]
+Signature="$Windows NT$"
+Class=Display
+ClassGUID={4D36E968-E325-11CE-BFC1-08002BE10318}
+ClassVer=2.0
+Provider=%Provider%
+CatalogFile=SecondScreenDisplay.cat
+DriverVer=10/31/2026,0.2.0.0
+PnpLockDown=1
+
+[Manufacturer]
+%Provider%=Models,NTamd64.10.0...22000
+[Models.NTamd64.10.0...22000]
+%Device%=DeviceInstall,Root\SecondScreenDisplay
+
+[SourceDisksNames]
+1=%Disk%
+[SourceDisksFiles]
+SecondScreenDisplay.dll=1
+[DestinationDirs]
+DriverCopy=13
+[DriverCopy]
+SecondScreenDisplay.dll
+
+[DeviceInstall.NT]
+Include=WUDFRD.inf
+Needs=WUDFRD.NT
+CopyFiles=DriverCopy
+[DeviceInstall.NT.HW]
+Include=WUDFRD.inf
+Needs=WUDFRD.NT.HW
+AddReg=DeviceSettings
+[DeviceSettings]
+HKR,,UpperFilters,0x00010000,"IndirectKmd"
+HKR,WUDF,DeviceGroupId,0x00000000,"SecondScreenDisplayGroup"
+; Only local interactive users, administrators and system. Frame IOCTLs also
+; require the owning WDF file object; an unrelated handle cannot fetch/remove.
+HKR,,Security,0x00000000,"D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGW;;;IU)"
+[DeviceInstall.NT.Services]
+Include=WUDFRD.inf
+Needs=WUDFRD.NT.Services
+[DeviceInstall.NT.Wdf]
+UmdfService=SecondScreenDisplay,DriverService
+UmdfServiceOrder=SecondScreenDisplay
+UmdfKernelModeClientPolicy=AllowKernelModeClients
+[DriverService]
+UmdfLibraryVersion=$UMDFVERSION$
+ServiceBinary=%13%\SecondScreenDisplay.dll
+UmdfExtensions=IddCx0102
+
+[Strings]
+Provider="SecondScreen"
+Device="SecondScreen Virtual Display (Experimental)"
+Disk="SecondScreen Display Driver"

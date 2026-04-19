@@ -202,8 +202,15 @@ fn produce(shared: Arc<Shared>) {
             .filter(|p| p.approved)
             .map(|p| p.token.clone());
         let Some(token) = token else {
+            // Virtual source Drop removes its monitor through the driver. Never do
+            // that I/O while holding the UI/status mutex, and recheck before waiting.
+            drop(s);
             source = None;
             source_token.clear();
+            let s = shared.state.lock().unwrap();
+            if s.stopped || s.pairing.session.as_ref().is_some_and(|p| p.approved) {
+                continue;
+            }
             // Wait indefinitely with no peer; time out only while a pending peer may expire.
             if s.pairing.session.is_some() {
                 drop(shared.wake.wait_timeout(s, Duration::from_secs(1)).unwrap());
@@ -223,20 +230,31 @@ fn produce(shared: Arc<Shared>) {
                 source = Some(capture::open(&shared.config)?);
                 source_token = token.clone();
             }
-            let pixels = source.as_mut().unwrap().frame()?;
+            let pixels = match source.as_mut().unwrap().poll()? {
+                capture::FramePoll::Frame(pixels) => pixels,
+                capture::FramePoll::Unchanged => return Ok((None, false)),
+                capture::FramePoll::Inactive => return Ok((None, true)),
+            };
             let (width, height) = (pixels.width(), pixels.height());
             let jpeg = capture::encode(&pixels, shared.config.quality)?;
             if jpeg.len() > 8 * 1024 * 1024 {
                 return Err("Encoded frame exceeds 8 MiB limit".to_string());
             }
             sequence += 1;
-            Ok(Frame {
-                sequence,
-                jpeg: Arc::new(jpeg),
-                width,
-                height,
-            })
+            Ok((
+                Some(Frame {
+                    sequence,
+                    jpeg: Arc::new(jpeg),
+                    width,
+                    height,
+                }),
+                false,
+            ))
         })();
+        if result.is_err() {
+            source = None;
+            source_token.clear();
+        }
         let mut s = shared.state.lock().unwrap();
         // A disconnected/replaced peer must never receive an in-flight old capture.
         if s.pairing
@@ -246,7 +264,9 @@ fn produce(shared: Arc<Shared>) {
             && !s.stopped
         {
             match result {
-                Ok(frame) => s.frame = Some(frame),
+                Ok((Some(frame), _)) => s.frame = Some(frame),
+                Ok((None, true)) => s.frame = None,
+                Ok((None, false)) => (),
                 Err(e) => {
                     s.error = Some(e);
                     s.frame = None;
@@ -454,7 +474,7 @@ fn route(request: Request, ip: IpAddr, address: SocketAddr, shared: &Shared) -> 
             s.pairing.disconnect(Instant::now()); s.frame = None; s.error = None;
             drop(s); shared.changed(); Reply::text(200, "Disconnected")
         }
-        ("GET", "/api/state") => Reply::bytes(200, "application/json", serde_json::to_vec(&serde_json::json!({"approved": approved, "error": s.error, "fps":shared.config.fps, "mode":"Mirroring", "source":shared.config.source})).unwrap()),
+        ("GET", "/api/state") => Reply::bytes(200, "application/json", serde_json::to_vec(&serde_json::json!({"approved": approved, "error": s.error, "fps":shared.config.fps, "mode":shared.config.source.mode_label(), "source":shared.config.source, "hasFrame":s.frame.is_some()})).unwrap()),
         ("GET", "/api/frame") if approved => {
             if let Some(e) = &s.error { return Reply::text(503, e); }
             let Some(frame) = &s.frame else { return Reply::text(204, ""); };

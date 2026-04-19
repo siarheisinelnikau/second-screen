@@ -7,6 +7,17 @@ pub enum SourceKind {
     #[default]
     PrimaryMonitor,
     Synthetic,
+    VirtualDisplay,
+}
+
+impl SourceKind {
+    pub fn mode_label(self) -> &'static str {
+        match self {
+            Self::PrimaryMonitor => "Mirroring",
+            Self::Synthetic => "Synthetic test pattern",
+            Self::VirtualDisplay => "Virtual display (experimental)",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,6 +43,11 @@ impl Default for StreamConfig {
 
 impl StreamConfig {
     pub fn validate(&self) -> Result<(), String> {
+        if self.source == SourceKind::VirtualDisplay
+            && !cfg!(all(windows, feature = "virtual-display"))
+        {
+            return Err("Build with --features virtual-display on Windows to enable the experimental driver backend".into());
+        }
         if !(320..=1920).contains(&self.max_width)
             || !(240..=1080).contains(&self.max_height)
             || !(30..=90).contains(&self.quality)
@@ -43,7 +59,7 @@ impl StreamConfig {
     }
 }
 
-/// Integration boundary for a future signed IddCx/UMDF provider. No driver is shipped.
+/// Provider owns the control connection; the returned source owns the monitor lease.
 /// A provider must own monitor arrival/departure and return its own frame source.
 pub trait ExtendedDisplayProvider {
     fn create_monitor(&mut self, width: u32, height: u32) -> Result<Box<dyn FrameSource>, String>;
@@ -52,11 +68,31 @@ pub trait ExtendedDisplayProvider {
 
 pub trait FrameSource {
     fn frame(&mut self) -> Result<RgbImage, String>;
+    fn poll(&mut self) -> Result<FramePoll, String> {
+        self.frame().map(FramePoll::Frame)
+    }
+}
+
+pub enum FramePoll {
+    Frame(RgbImage),
+    Unchanged,
+    Inactive,
 }
 
 pub fn open(config: &StreamConfig) -> Result<Box<dyn FrameSource>, String> {
     config.validate()?;
     match config.source {
+        SourceKind::VirtualDisplay => {
+            #[cfg(all(windows, feature = "virtual-display"))]
+            {
+                crate::virtual_display::Provider::new(config.fps)
+                    .create_monitor(config.max_width, config.max_height)
+            }
+            #[cfg(not(all(windows, feature = "virtual-display")))]
+            {
+                Err("Virtual display backend is not enabled in this build".into())
+            }
+        }
         SourceKind::Synthetic => Ok(Box::new(Synthetic {
             width: config.max_width,
             height: config.max_height,
