@@ -7,6 +7,7 @@
 using namespace secondscreen;
 
 int main(int argc, char** argv) {
+    assert(!ReaderExpired(5999, 1000)); assert(ReaderExpired(6000, 1000));
     static_assert(QueryIoctl == CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA));
     static_assert(CreateIoctl == CTL_CODE(FILE_DEVICE_UNKNOWN, 0x801, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA));
     static_assert(FrameIoctl == CTL_CODE(FILE_DEVICE_UNKNOWN, 0x802, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA));
