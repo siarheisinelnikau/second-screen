@@ -131,6 +131,15 @@ impl Session {
         if u32_at(&header, 44) != 0 {
             return Err("Virtual-display adapter is not ready".into());
         }
+        if u64_at(&header, 8) != 0
+            || u64_at(&header, 16) != 0
+            || u32_at(&header, 36) != 0
+            || u32_at(&header, 48) != 0
+            || u32_at(&header, 24) < width
+            || u32_at(&header, 28) < height
+        {
+            return Err("Invalid virtual-display capability fields".into());
+        }
         let n = transport.ioctl(CREATE, &create_request(width, height, fps), &mut header)?;
         // Closing the owning file removes a monitor even if a malformed create reply fails validation.
         if n != HEADER {
@@ -143,6 +152,9 @@ impl Session {
             || u32_at(&header, 28) != height
             || u32_at(&header, 44) != 0
             || u32_at(&header, 36) != 0
+            || u64_at(&header, 16) != 0
+            || u32_at(&header, 32) != width * 4
+            || u32_at(&header, 48) != 0
         {
             return Err("Driver created an incompatible monitor".into());
         }

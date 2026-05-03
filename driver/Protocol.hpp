@@ -8,6 +8,8 @@ inline constexpr std::uint32_t ProtocolVersion = 0x00010000;
 inline constexpr std::uint32_t MaxWidth = 1920, MaxHeight = 1080, MaxFps = 20;
 inline constexpr std::size_t MaxPixels = std::size_t(MaxWidth) * MaxHeight * 4;
 inline constexpr std::uint32_t Bgra8 = 1;
+inline constexpr std::uint64_t ReaderTimeoutMs = 5000;
+inline bool ReaderExpired(std::uint64_t now, std::uint64_t lastRead) { return now - lastRead >= ReaderTimeoutMs; }
 // CTL_CODE(FILE_DEVICE_UNKNOWN, function, METHOD_BUFFERED, FILE_READ_DATA|FILE_WRITE_DATA).
 inline constexpr std::uint32_t QueryIoctl = 0x0022e000;
 inline constexpr std::uint32_t CreateIoctl = 0x0022e004;

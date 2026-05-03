@@ -123,7 +123,7 @@ struct DeviceState {
             if (watchdog) WdfTimerStop(watchdog, FALSE);
         } else {
             // Keep the handle until departure succeeds; never lose a connected monitor.
-            lastRead = GetTickCount64() - 5000;
+            lastRead = GetTickCount64() - ReaderTimeoutMs;
             if (watchdog) WdfTimerStart(watchdog, WDF_REL_TIMEOUT_IN_MS(1000));
         }
         return status;
@@ -226,7 +226,7 @@ _Use_decl_annotations_
 void Watchdog(WDFTIMER timer) {
     auto& state = Device(WdfTimerGetParentObject(timer)); std::lock_guard<std::mutex> lock(state.control);
     if (!state.monitor) return;
-    if (GetTickCount64() - state.lastRead >= 5000) { const NTSTATUS status = state.Remove(); UNREFERENCED_PARAMETER(status); }
+    if (ReaderExpired(GetTickCount64(), state.lastRead)) { const NTSTATUS status = state.Remove(); UNREFERENCED_PARAMETER(status); }
     else WdfTimerStart(timer, WDF_REL_TIMEOUT_IN_MS(1000));
 }
 
