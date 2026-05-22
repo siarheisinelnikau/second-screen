@@ -2,6 +2,7 @@ pub mod capture;
 pub mod pairing;
 pub mod server;
 pub mod settings;
+pub mod ui;
 pub mod update;
 #[cfg(feature = "virtual-display")]
 pub mod virtual_display;

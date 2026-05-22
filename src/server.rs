@@ -256,6 +256,8 @@ fn produce(shared: Arc<Shared>) {
             source_token.clear();
         }
         let mut s = shared.state.lock().unwrap();
+        let had_frame = s.frame.is_some();
+        let previous_error = s.error.clone();
         // A disconnected/replaced peer must never receive an in-flight old capture.
         if s.pairing
             .session
@@ -272,6 +274,9 @@ fn produce(shared: Arc<Shared>) {
                     s.frame = None;
                 }
             }
+        }
+        if had_frame != s.frame.is_some() || previous_error != s.error {
+            (shared.repaint)();
         }
         let delay = Duration::from_secs_f64(1.0 / shared.config.fps as f64)
             .saturating_sub(started.elapsed());
@@ -465,6 +470,7 @@ fn route(request: Request, ip: IpAddr, address: SocketAddr, shared: &Shared) -> 
     if s.pairing.expire(Instant::now()) {
         s.frame = None;
         s.error = None;
+        shared.changed();
     }
     let Some(approved) = s.pairing.authenticate(token, ip, Instant::now()) else {
         return Reply::text(401, "Pairing expired or disconnected");
@@ -518,6 +524,50 @@ mod tests {
             self.shared.changed();
             self.thread.take().unwrap().join().unwrap();
         }
+    }
+    #[test]
+    fn steady_synthetic_stream_does_not_repaint_host_for_each_frame() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let counter = Arc::new(AtomicUsize::new(0));
+        let mut state = Arc::try_unwrap(synthetic_shared()).ok().unwrap();
+        let repaint_counter = counter.clone();
+        state.repaint = Arc::new(move || {
+            repaint_counter.fetch_add(1, Ordering::Relaxed);
+        });
+        let shared = Arc::new(state);
+        {
+            let mut s = shared.state.lock().unwrap();
+            let code = s.pairing.code.clone();
+            s.pairing
+                .pair(&code, "127.0.0.1".parse().unwrap(), Instant::now())
+                .unwrap();
+            s.pairing.approve(Instant::now());
+        }
+        let producer = shared.clone();
+        let _fixture = ProducerFixture {
+            shared: shared.clone(),
+            thread: Some(thread::spawn(move || produce(producer))),
+        };
+        let deadline = Instant::now() + Duration::from_secs(3);
+        loop {
+            let sequence = shared
+                .state
+                .lock()
+                .unwrap()
+                .frame
+                .as_ref()
+                .map_or(0, |f| f.sequence);
+            if sequence >= 3 {
+                break;
+            }
+            assert!(Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(
+            counter.load(Ordering::Relaxed),
+            1,
+            "Only the first visible frame changes host status"
+        );
     }
     #[test]
     fn memory_transport_pairs_approves_decodes_and_revokes_generated_frames() {

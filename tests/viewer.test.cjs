@@ -26,7 +26,8 @@ function fixture(responses) {
     fetch: async (path, options) => {
       requests.push({ path, options });
       assert.ok(responses.length, 'Unexpected request');
-      return responses.shift();
+      const response = responses.shift();
+      return typeof response === 'function' ? response({ element, revoked, requests }) : response;
     },
   });
   return { element, requests, shown, revoked };
@@ -55,4 +56,22 @@ test('failed pairing returns to the form without requesting frames', async () =>
   assert.equal(f.requests.length, 1);
   assert.equal(f.element('pairing').hidden, false);
   assert.equal(f.element('connect').disabled, false);
+});
+test('inactive virtual target clears its old image before another frame is requested', async () => {
+  const f = fixture([
+    ok({ token: 'virtual-fixture' }),
+    ok({ approved: true, fps: 10, source: 'VirtualDisplay', mode: 'Virtual display (experimental)', hasFrame: true }),
+    { ok: true, status: 200, blob: async () => ({ size: 1234 }), headers: { get: () => '1' } },
+    ok({ approved: true, fps: 10, source: 'VirtualDisplay', mode: 'Virtual display (experimental)', hasFrame: false }),
+    ({ element, revoked }) => {
+      assert.deepEqual(revoked, ['blob:fixture']);
+      assert.match(element('waiting').textContent, /Enable Extend/);
+      assert.equal(element('mode').textContent, 'Virtual display (experimental)');
+      return { ok: true, status: 204 };
+    },
+    denied,
+  ]);
+  await f.element('pair-form').listeners.submit({ preventDefault() {} });
+  assert.equal(f.requests[4].path, '/api/frame?after=1');
+  assert.equal(f.element('mode').textContent, 'VIEWER');
 });
