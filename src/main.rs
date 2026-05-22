@@ -5,16 +5,15 @@ mod reactive;
 use eframe::egui;
 use second_screen::{
     VERSION,
-    capture::SourceKind,
     server::{Host, Shared},
     settings::{self, Settings},
+    ui::{self, ConnectAction, HostView, UpdateView},
     update::{self, Available},
 };
 use std::{
     net::{Ipv4Addr, SocketAddrV4},
     sync::{Arc, Mutex},
     thread,
-    time::Duration,
 };
 
 enum HostCommand {
@@ -60,15 +59,9 @@ struct App {
 
 impl App {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let mut style = (*cc.egui_ctx.style()).clone();
-        style.spacing.item_spacing = egui::vec2(12.0, 12.0);
-        style.spacing.button_padding = egui::vec2(16.0, 10.0);
-        style.visuals = egui::Visuals::dark();
-        style.visuals.panel_fill = egui::Color32::from_rgb(11, 20, 30);
-        style.visuals.selection.bg_fill = egui::Color32::from_rgb(30, 95, 83);
-        cc.egui_ctx.set_style(style);
+        ui::apply_theme(&cc.egui_ctx);
         let (settings, message) = match settings::load(&settings::path()) {
-            Ok(s) => (s, "Sharing is off. Nothing is being captured.".into()),
+            Ok(s) => (s, String::new()),
             Err(e) => (
                 Settings {
                     startup_updates: false,
@@ -228,157 +221,69 @@ impl App {
             Err(_) => self.message = "Host worker is busy; try again shortly.".into(),
         }
     }
-    fn host_ui(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Your tablet. A familiar view.");
-        ui.label("Share a desktop source with one paired browser on your local network.");
-        ui.colored_label(
-            egui::Color32::from_rgb(106, 229, 189),
-            format!("{}  ·  READ ONLY", self.settings.stream.source.mode_label()),
+    fn host_ui(&mut self, surface: &mut egui::Ui) {
+        let host = self.shared.as_ref().map(|shared| {
+            let s = shared.state.lock().unwrap();
+            HostView {
+                address: self.address.clone(),
+                code: s.pairing.code.clone(),
+                peer: s.pairing.session.as_ref().map(|p| p.ip.to_string()),
+                approved: s.pairing.session.as_ref().is_some_and(|p| p.approved),
+                has_frame: s.frame.is_some(),
+                stopped: s.stopped,
+                error: s.error.clone(),
+            }
+        });
+        let actions = ui::connect(
+            surface,
+            &mut self.settings,
+            &mut self.trusted_network,
+            host.as_ref(),
+            self.busy,
+            &self.message,
         );
-        ui.separator();
-        if let Some(shared) = self.shared.clone() {
-            let (code, peer, frame, error, stopped) = {
-                let s = shared.state.lock().unwrap();
-                (
-                    s.pairing.code.clone(),
-                    s.pairing.session.as_ref().map(|p| (p.ip, p.approved)),
-                    s.frame
-                        .as_ref()
-                        .map(|f| (f.width, f.height, f.sequence, f.jpeg.len())),
-                    s.error.clone(),
-                    s.stopped,
-                )
-            };
-            ui.heading(if stopped {
-                "Listener stopped"
-            } else {
-                "Host is listening"
-            });
-            ui.label("Open this exact address on your tablet (same network):");
-            ui.horizontal(|ui| {
-                ui.monospace(&self.address);
-                if ui.button("Copy address").clicked() {
-                    ui.ctx().copy_text(self.address.clone());
-                }
-            });
-            if self.settings.bind_ip == "127.0.0.1" {
-                ui.label("Loopback address: only browsers on this computer can connect.");
-            }
-            if let Some((ip, approved)) = peer {
-                ui.label(format!(
-                    "Viewer: {ip} — {}",
-                    if approved {
-                        "Approved"
-                    } else {
-                        "Waiting for your approval"
+        for action in actions {
+            match action {
+                ConnectAction::Start => self.send_host(HostCommand::Start(self.settings.clone())),
+                ConnectAction::Stop => self.send_host(HostCommand::Stop),
+                ConnectAction::Save => self.send_host(HostCommand::Save(self.settings.clone())),
+                ConnectAction::Approve => {
+                    if let Some(shared) = &self.shared {
+                        shared.approve();
+                        self.message.clear();
                     }
-                ));
-                let approval = if self.settings.stream.source == SourceKind::VirtualDisplay {
-                    "Approve viewer and create virtual monitor"
-                } else {
-                    "Approve viewer and start capture"
-                };
-                if !approved && ui.button(approval).clicked() {
-                    shared.approve();
                 }
-                if ui.button("Disconnect viewer / rotate code").clicked() {
-                    shared.disconnect();
+                ConnectAction::Disconnect => {
+                    if let Some(shared) = &self.shared {
+                        shared.disconnect();
+                        self.message.clear();
+                    }
                 }
-            } else {
-                ui.label("Pairing code (expires after five minutes):");
-                ui.label(
-                    egui::RichText::new(code)
-                        .monospace()
-                        .size(30.0)
-                        .color(egui::Color32::from_rgb(106, 229, 189)),
-                );
-                ui.label("Enter this code on the tablet, then approve its request here.");
-                if ui.button("New pairing code").clicked() {
-                    shared.disconnect();
-                }
+                ConnectAction::CopyAddress => surface.ctx().copy_text(self.address.clone()),
             }
-            if let Some((w, h, sequence, bytes)) = frame {
-                ui.label(format!(
-                    "Latest frame: {w} × {h}  ·  #{sequence}  ·  {} KiB",
-                    bytes / 1024
-                ));
-            }
-            if let Some(error) = error {
-                ui.colored_label(egui::Color32::LIGHT_RED, error);
-                ui.label("Stop sharing and start again to retry capture.");
-            }
-            if ui
-                .add_enabled(!self.busy, egui::Button::new("Stop sharing"))
-                .clicked()
-            {
-                self.send_host(HostCommand::Stop);
-            }
-        } else {
-            ui.add_enabled_ui(!self.busy, |ui| {
-                egui::Grid::new("stream-settings").spacing([20.0, 12.0]).show(ui, |ui| {
-                    ui.label("Source");
-                    egui::ComboBox::from_id_salt("source").selected_text(self.settings.stream.source.mode_label()).show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.settings.stream.source, SourceKind::PrimaryMonitor, "Primary monitor");
-                        ui.selectable_value(&mut self.settings.stream.source, SourceKind::Synthetic, "Synthetic test pattern");
-                        #[cfg(all(windows, feature = "virtual-display"))]
-                        ui.selectable_value(&mut self.settings.stream.source, SourceKind::VirtualDisplay, "Virtual display (experimental; driver required)");
-                    }); ui.end_row();
-                    ui.label("Listen IPv4"); ui.text_edit_singleline(&mut self.settings.bind_ip); ui.end_row();
-                    ui.label("Port"); ui.add(egui::DragValue::new(&mut self.settings.port).range(1..=65535)); ui.end_row();
-                    ui.label("Maximum width"); ui.add(egui::Slider::new(&mut self.settings.stream.max_width, 320..=1920).suffix(" px")); ui.end_row();
-                    ui.label("Maximum height"); ui.add(egui::Slider::new(&mut self.settings.stream.max_height, 240..=1080).suffix(" px")); ui.end_row();
-                    ui.label("JPEG quality"); ui.add(egui::Slider::new(&mut self.settings.stream.quality, 30..=90)); ui.end_row();
-                    ui.label("Frame rate limit"); ui.add(egui::Slider::new(&mut self.settings.stream.fps, 5..=20).suffix(" fps")); ui.end_row();
-                });
-                if self.settings.stream.source == SourceKind::VirtualDisplay {
-                    ui.colored_label(egui::Color32::YELLOW, "Requires the separately built and installed SecondScreen driver. After approval, select Extend for the new monitor in Windows Display settings. This app never installs a driver or changes your desktop arrangement automatically. Driver/device validation is pending.");
-                }
-                ui.label("Enter your computer's private LAN IPv4 to reach it from a tablet. The default 127.0.0.1 is local only. Display aspect ratio is preserved; settings apply on the next start.");
-                ui.colored_label(egui::Color32::from_rgb(223, 194, 132), "Unencrypted HTTP: frames and credentials can be read on the network.");
-                ui.checkbox(&mut self.trusted_network, "I am using a trusted private network and understand this limitation");
-                ui.horizontal(|ui| {
-                    if ui.add_enabled(self.trusted_network, egui::Button::new("Start sharing")).clicked() { self.send_host(HostCommand::Start(self.settings.clone())); }
-                    if ui.button("Save settings").clicked() { self.send_host(HostCommand::Save(self.settings.clone())); }
-                });
-            });
         }
-        ui.separator();
-        ui.label(&self.message);
     }
-    fn update_ui(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Updates & settings");
-        ui.label(format!(
-            "Installed version: {VERSION}  ·  Windows x64 portable"
-        ));
-        if ui
-            .checkbox(
-                &mut self.settings.startup_updates,
-                "Check for updates on startup",
-            )
-            .changed()
-        {
+    fn update_ui(&mut self, surface: &mut egui::Ui) {
+        let view = {
+            let s = self.updates.lock().unwrap();
+            UpdateView {
+                message: s.message.clone(),
+                busy: s.busy,
+                available: s.available.as_ref().map(|a| a.version.to_string()),
+                progress: s.progress,
+                installer_error: self.installer_error.clone(),
+            }
+        };
+        let actions = ui::updates(surface, &mut self.settings.startup_updates, &view);
+        if actions.save {
             self.send_host(HostCommand::Save(self.settings.clone()));
         }
-        let (message, busy, available, progress) = {
-            let s = self.updates.lock().unwrap();
-            (s.message.clone(), s.busy, s.available.clone(), s.progress)
-        };
-        ui.label(message);
-        if let Some(progress) = progress {
-            ui.add(egui::ProgressBar::new(progress).show_percentage());
-        }
-        if ui
-            .add_enabled(!busy, egui::Button::new("Check for updates"))
-            .clicked()
-            && self.update_tx.try_send(UpdateCommand::Check).is_ok()
-        {
+        if actions.check && self.update_tx.try_send(UpdateCommand::Check).is_ok() {
             self.updates.lock().unwrap().busy = true;
         }
-        if let Some(available) = available {
-            ui.label("Installation will disconnect the tablet and restart SecondScreen. Settings are preserved. A backup of the previous executable stays beside the application.");
-            if ui
-                .add_enabled(!busy, egui::Button::new("Download and install"))
-                .clicked()
+        if actions.install {
+            let available = self.updates.lock().unwrap().available.clone();
+            if let Some(available) = available
                 && self
                     .update_tx
                     .try_send(UpdateCommand::Install(available))
@@ -387,14 +292,6 @@ impl App {
                 self.updates.lock().unwrap().busy = true;
             }
         }
-        if let Some(error) = &self.installer_error {
-            ui.colored_label(
-                egui::Color32::LIGHT_RED,
-                format!("Last installer error: {error}"),
-            );
-        }
-        ui.separator();
-        ui.label(&self.message);
     }
 }
 impl eframe::App for App {
@@ -405,9 +302,7 @@ impl eframe::App for App {
                 HostEvent::Started(address, shared) => {
                     self.address = address;
                     self.shared = Some(shared);
-                    self.message =
-                        "Waiting for an explicitly paired and approved viewer. No capture yet."
-                            .into();
+                    self.message.clear();
                 }
                 HostEvent::Stopped => {
                     self.shared = None;
@@ -427,24 +322,8 @@ impl eframe::App for App {
         if restart {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
-        egui::TopBottomPanel::top("header").show(ctx, |ui| {
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("SecondScreen").size(25.0).strong());
-                ui.label(
-                    egui::RichText::new("LOCAL PREVIEW")
-                        .small()
-                        .color(egui::Color32::from_rgb(106, 229, 189)),
-                );
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.selectable_value(&mut self.tab, 2, "About");
-                    ui.selectable_value(&mut self.tab, 1, "Updates");
-                    ui.selectable_value(&mut self.tab, 0, "Connect");
-                });
-            });
-            ui.add_space(8.0);
-        });
-        egui::CentralPanel::default().show(ctx, |ui| {
+        ui::header(ctx, &mut self.tab);
+        egui::CentralPanel::default().frame(egui::Frame::new().fill(ui::BACKGROUND).inner_margin(24.0)).show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 if let Some(version) = available && ui.button(format!("Update {version} available — open Updates")).clicked() { self.tab = 1; }
                 match self.tab {
@@ -461,10 +340,6 @@ impl eframe::App for App {
                 }
             });
         });
-        // Only a streaming host needs periodic small status refreshes. Idle UI is event driven.
-        if self.shared.is_some() {
-            ctx.request_repaint_after(Duration::from_secs(1));
-        }
     }
 }
 impl Drop for App {
