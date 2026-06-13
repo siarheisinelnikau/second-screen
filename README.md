@@ -1,15 +1,16 @@
 # SecondScreen
 
-An independent Windows host and embedded tablet/browser viewer for a local desktop mirror. Rust, native desktop controls, one portable EXE, no account or cloud relay. MIT licensed; not affiliated with Duet.
+An independent Windows host and embedded tablet/browser viewer. Rust, native desktop controls, one portable host EXE, no account or cloud relay. MIT licensed; not affiliated with Duet.
 
-**Version 0.1.0 is mirroring, not an extended desktop.** It does not create a Windows monitor. The Windows capture implementation is compiled, but actual screen capture and tablet operation have not yet been exercised. See [manual validation](docs/VALIDATION.md).
+**Version 0.2.0 adds an experimental virtual-display backend and driver sources.** Default builds remain mirroring/synthetic-only. The opt-in backend creates a genuine IddCx monitor after tablet approval and streams that target's surfaces; Windows desktop arrangement stays under your control. The complete driver could not be built here because WDK is absent, so real desktop extension is not yet verified. See [driver build/status](driver/README.md) and [validation](docs/DRIVER_VALIDATION.md).
 
 ## What is implemented
 
 - Windows primary-monitor capture through GDI, aspect-preserving scaling, JPEG encoding and authenticated HTTP frame delivery. A moving synthetic source exercises the same encoder and transport without reading the screen.
+- Optional IddCx/UMDF source with monitor arrival/departure, owner-file IOCTLs, two-slot D3D11 readback, bounded BGRA frames and a reader watchdog. No driver installation, signing, registration or topology changes are performed by the host/build scripts.
 - Embedded responsive viewer with a pairing form, host approval, connection state, full screen, resolution indicator and disconnect. No browser installation, external scripts, fonts or CDN.
 - One viewer per host, a random 10-character pairing code, five pairing attempts per minute globally, a 256-bit session token bound to the viewer IP, a fixed approval deadline and idle expiry.
-- Native source, resolution, JPEG quality and 5–20 FPS controls. Start, approve, disconnect, rotate code and stop actions are explicit. Closing the host shuts down the listener and capture worker.
+- A focused Connect screen with display choice, picture presets and pairing steps. Exact resolution, JPEG quality, port and 5–20 FPS controls are under Picture & network details. Closing the host stops sharing; no hidden tray sharing is introduced.
 - Updates settings with the installed version, manual **Check for updates**, a persistent startup-check opt-out and **Download and install** with progress, digest checking, replacement helper and restart.
 
 **Network limitation:** the viewer uses unencrypted HTTP. Pairing prevents casual unauthorized viewing, but does not protect frames or credentials from network observers or an active attacker. Use a trusted private LAN only. There is no TLS, internet relay, USB transport, remote input or unattended sharing. Do not port-forward this service. The host requires acknowledgment of this limitation before starting.
@@ -26,17 +27,17 @@ node --test tests/viewer.test.cjs
 ./scripts/package.ps1 -Offline
 ```
 
-Omit `-Offline` on a clean development computer that needs dependencies. The repository configuration limits Cargo to two jobs and keeps build output in its own `target` directory. Packaging links the MSVC runtime statically and produces `dist/SecondScreen-v0.1.0.exe` and `dist/SHA256SUMS`. No installer, service or display driver is included. The executable embeds the viewer; ship the accompanying license notices as well.
+Omit `-Offline` on a clean development computer that needs dependencies. Cargo is limited to two jobs and repository-local `target` output. Packaging links the MSVC runtime statically and produces `dist/SecondScreen-v0.2.0.exe` and `dist/SHA256SUMS`. The EXE embeds the viewer, not a driver package; ship its license notices too. To build the experimental selector, use `./scripts/package.ps1 -Offline -VirtualDisplay`. It still never opens/installs a driver during compilation.
 
 `./scripts/generate-notices.ps1 -Offline` regenerates the locked Windows dependency inventory and available code/font license texts. The inventory explicitly marks upstream archives missing standalone code-license texts. Resolve those notices and review font attribution before public distribution; this local build is not a publication-ready release.
 
 ## Use after manual validation
 
 1. Launch the packaged EXE. Sharing starts off; startup update checking runs in the background unless disabled in **Updates**.
-2. In **Connect**, select **Synthetic test pattern** first. Enter the computer's RFC1918 private LAN IPv4 address. The default `127.0.0.1` is local to the host and cannot be opened on a tablet. IPv6, hostnames and wildcard binding are not supported.
-3. Choose the port, maximum resolution, quality and FPS limit. Acknowledge the HTTP limitation and click **Start sharing**. Firewall access, if needed, must be configured by the user; the application does not alter firewall rules.
+2. In **Connect**, select **Test connection** first. Enter the computer's RFC1918 private LAN IPv4 address. The default `127.0.0.1` is local to the host and cannot be opened on a tablet. IPv6, hostnames and wildcard binding are not supported.
+3. Choose a picture preset; detailed controls are optional. Acknowledge the HTTP limitation and click **Start sharing**. Firewall access, if needed, must be configured by the user; the application does not alter firewall rules.
 4. On a tablet on the same trusted network, open the exact `http://IP:PORT` address shown. Enter the code within five minutes. Check the requesting IP on the host and click **Approve viewer and start capture**.
-5. For actual mirroring, stop, choose **Primary monitor**, start again and pair again. Only approval starts capture. The configured dimensions are limits, not a change to the Windows display mode; the native aspect ratio is retained without upscaling.
+5. For mirroring, stop, choose **Mirror monitor**, start again and pair again. Only approval starts capture. Dimensions are limits, not a physical display mode change; aspect ratio is retained without upscaling.
 6. Use **Disconnect** in either application to revoke access, or **Stop sharing** to close the listener. The last frame is cleared on disconnect. An abandoned viewer expires after 15 seconds without authenticated requests; a pending request has a 60-second maximum approval window.
 
 Settings are saved by **Save settings** and immediately when changing the startup-update toggle. Storage: `%LOCALAPPDATA%/SecondScreen/settings.json`. Tokens and pairing codes are never persisted. Stream changes apply on the next start. A browser reload requires pairing again.
@@ -49,11 +50,17 @@ Only stable semantic versions and the official Windows x64 asset `SecondScreen-v
 
 ## Extended display status
 
-An additional independent Windows desktop needs a real virtual-display backend. The current host has a `FrameSource` / `ExtendedDisplayProvider` boundary, but ships no IddCx driver and must not be advertised as desktop extension. The [virtual-display integration guide](docs/VIRTUAL_DISPLAY.md) covers the required WDK project, monitor lifecycle, surface transport, signing and validation work.
+The `virtual-display` feature implements `ExtendedDisplayProvider` with real device IOCTLs and an independent Windows display source. Its corresponding driver code, INF and WDK project are in [driver](driver/README.md). It reports one monitor only after approval, and removes it on disconnect, file cleanup, power-down or reader timeout. The user chooses Extend in Windows during future device testing; the app never rearranges displays automatically. The [protocol guide](docs/VIRTUAL_DISPLAY.md) and [driver validation record](docs/DRIVER_VALIDATION.md) document what is implemented and what remains untested. A missing driver produces an error, with no mirroring fallback.
 
 ## Screenshots
 
-Real screenshots of the Connect screen, Updates/settings screen and a connected tablet are **pending**. This implementation session prohibited launching GUI applications, capturing the screen or using real devices. No mock screenshots or broken image placeholders are supplied.
+These images render the real shared application components with isolated fixtures in an offscreen CPU test harness. They were produced without a window, computer use, network, user settings or devices. The production host currently presents through eframe/OpenGL; this CPU fallback verifies client-area layout, not native rendering parity, window chrome, input behavior or idle performance. Real native-window and connected-tablet screenshots remain pending.
+
+![Connect screen with the experimental selector, offscreen fixture at 820 by 760](docs/screenshots/connect.png)
+
+![Updates settings, offscreen fixture at 820 by 760](docs/screenshots/updates.png)
+
+Regenerate six bounded fixture views with `./scripts/render-previews.ps1`. The harness shares `src/ui.rs` with the native host, renders four finite frames per image and exits under an external 30-second timeout. It does not start the application workers or call GDI/D3D/device APIs.
 
 ## Verification
 
@@ -63,6 +70,6 @@ The synthetic tests cover pairing/approval, token revocation, expiry, request bo
 cargo test --locked --lib loopback_synthetic_transport -- --ignored --nocapture
 ```
 
-That command uses only loopback and synthetic pixels, never LAN binding or screen capture. Compilation alone does not establish Windows capture, browser compatibility, idle CPU use or installation correctness. See [validation status](docs/VALIDATION.md), [architecture](docs/ARCHITECTURE.md), [release-note draft](docs/RELEASE_NOTES.md), and [third-party notices](THIRD_PARTY_NOTICES.md).
+That command uses only loopback and synthetic pixels, never LAN binding or screen capture. Compilation alone does not establish Windows capture, browser compatibility, idle CPU use or installation correctness. See [original mirroring validation](docs/VALIDATION.md), [driver validation](docs/DRIVER_VALIDATION.md), [architecture](docs/ARCHITECTURE.md), [current release-note draft](docs/RELEASE_NOTES_0.2.0.md), and [third-party notices](THIRD_PARTY_NOTICES.md).
 
-The local release build succeeded (8,125,440-byte EXE). `python scripts/inspect_pe.py dist/SecondScreen-v0.1.0.exe` verifies the x64 GUI PE headers, import table and digest without executing it. Python is only an optional development verification tool. A separate opt-in shutdown test passed with a synthetic loopback listener and no client connection.
+The v0.2.0 experimental host package built successfully (8,135,168 bytes). `python scripts/inspect_pe.py dist/SecondScreen-v0.2.0.exe` passed x64 GUI PE/import/digest checks without executing it. Python is an optional development tool. The driver tests separately compile the SDK readback module and verify the actual C++ mailbox output with Rust; this does not replace a complete WDK build/device check.
