@@ -17,7 +17,7 @@ An independent Windows host and embedded tablet/browser viewer. Rust, native des
 
 ## Build
 
-Windows x64 is the supported packaging target. Use a current stable Rust MSVC toolchain and the Visual C++ build tools. Node 22+ is used only for the viewer tests; it is not needed by the installed application.
+Windows x64 is the supported packaging target. Use Rust 1.95 or newer with the MSVC toolchain and the Visual C++ build tools. Node 22+ is used only for the viewer tests; it is not needed by the installed application.
 
 ```powershell
 cargo fmt --all -- --check
@@ -46,7 +46,7 @@ Settings are saved by **Save settings** and immediately when changing the startu
 
 The planned canonical repository is [siarheisinelnikau/second-screen](https://github.com/siarheisinelnikau/second-screen). It has **not been published by this task**. A missing repository/release, network error or rate limit is shown as an unavailable check, not as an up-to-date installation. Startup failures remain on the Updates page without a dialog.
 
-Only stable semantic versions and the official Windows x64 asset `SecondScreen-vVERSION.exe` are accepted. The GitHub asset's SHA-256 digest is required, HTTPS redirects stay HTTPS, file size is bounded and the PE architecture is checked. Installation is always initiated by the user. Keep the portable EXE in a writable folder: the application will not elevate. The helper waits for a verified parent process to exit before replacing it, keeps a recovery backup, attempts rollback if replacement/relaunch fails and leaves settings untouched. The installed filename is preserved. See [update design and recovery](docs/ARCHITECTURE.md#portable-updates).
+Only stable semantic versions and the official Windows x64 asset `SecondScreen-vVERSION.exe` are accepted. A matching SHA-256 checksum entry or valid GitHub asset digest is required, HTTPS redirects stay HTTPS, file size is bounded and the PE architecture is checked. Installation is always initiated by the user. Keep the portable EXE in a writable folder: the application will not elevate. The helper waits for a verified parent process to exit before replacing it, keeps a recovery backup, attempts rollback if replacement/relaunch fails and leaves settings untouched. The installed filename is preserved. See [update design and recovery](docs/ARCHITECTURE.md#portable-updates).
 
 ## Extended display status
 
@@ -54,7 +54,7 @@ The `virtual-display` feature implements `ExtendedDisplayProvider` with real dev
 
 ## Screenshots
 
-These images render the real shared application components with isolated fixtures in an offscreen CPU test harness. They were produced without a window, computer use, network, user settings or devices. The production host currently presents through eframe/OpenGL; this CPU fallback verifies client-area layout, not native rendering parity, window chrome, input behavior or idle performance. Real native-window and connected-tablet screenshots remain pending.
+These images render the real shared application components with isolated fixtures in an offscreen CPU test harness. They were produced without a window, computer use, network, user settings or devices. The production host now uses the same CPU rasterizer and presents through softbuffer/Win32 GDI. These captures verify client-area layout, not window chrome, input behavior or idle performance. Real native-window and connected-tablet screenshots remain pending.
 
 ![Connect screen with the experimental selector, offscreen fixture at 820 by 760](docs/screenshots/connect.png)
 
@@ -73,3 +73,14 @@ cargo test --locked --lib loopback_synthetic_transport -- --ignored --nocapture
 That command uses only loopback and synthetic pixels, never LAN binding or screen capture. Compilation alone does not establish Windows capture, browser compatibility, idle CPU use or installation correctness. See [original mirroring validation](docs/VALIDATION.md), [driver validation](docs/DRIVER_VALIDATION.md), [architecture](docs/ARCHITECTURE.md), [current release-note draft](docs/RELEASE_NOTES_0.2.0.md), and [third-party notices](THIRD_PARTY_NOTICES.md).
 
 The v0.2.0 experimental host package built successfully (8,135,168 bytes). `python scripts/inspect_pe.py dist/SecondScreen-v0.2.0.exe` passed x64 GUI PE/import/digest checks without executing it. Python is an optional development tool. The driver tests separately compile the SDK readback module and verify the actual C++ mailbox output with Rust; this does not replace a complete WDK build/device check.
+
+
+## Shared updates and CPU host audit
+
+Build this repository beside `rust-auto-updator`: the core is a local path dependency at `../rust-auto-updator/crates/rust-auto-updator`. CI/package environments must provision both siblings; the shared core has not been published to a registry by this change. The host retains its persisted startup opt-out, manual check and explicit Download and install action. Network selection, verification, progress, staging, replacement, rollback and cleanup now use that core. Packages keep `SecondScreen-vVERSION.exe` and `SHA256SUMS`; earlier GitHub digest-only metadata remains supported.
+
+The control window uses egui software rasterization and softbuffer's Win32 GDI path. It creates no OpenGL or DirectX context. The experimental virtual-display driver uses D3D independently for its required capture surfaces. The host sleeps without a repaint deadline, reuses its bitmap for unchanged expose events and suppresses layout/raster/present while minimized. Background pairing and host commands still run. Closing the host stops sharing; there is no tray mode or tray icon to configure.
+
+Original multi-size executable and runtime window icons are now supplied. After packaging, `./scripts/inspect-icons.ps1` loads the EXE as resource data and renders 16–256 pixel icons without executing the application. Optional `SECOND_SCREEN_RENDER_METRICS` writes aggregate logic/layout/raster/present counts on normal exit for later runtime diagnostics.
+
+This audit used source inspection, isolated fixture tests and packaged resource loading. Native-window launch, OS taskbar identity, visible/minimized/restore frame counts, CPU/GPU load and subjective responsiveness remain unverified in this code-only session. Existing real component captures above remain accurate; native host and connected-tablet screenshots still require the separately authorized device/UI validation.

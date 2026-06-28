@@ -1,8 +1,7 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
-mod reactive;
+mod host;
 
-use eframe::egui;
 use second_screen::{
     VERSION,
     server::{Host, Shared},
@@ -30,7 +29,7 @@ enum HostEvent {
 }
 enum UpdateCommand {
     Check,
-    Install(Available),
+    Install(Box<Available>),
 }
 #[derive(Default)]
 struct UpdateState {
@@ -58,8 +57,8 @@ struct App {
 }
 
 impl App {
-    fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        ui::apply_theme(&cc.egui_ctx);
+    fn new(ctx: &egui::Context) -> Self {
+        ui::apply_theme(ctx);
         let (settings, message) = match settings::load(&settings::path()) {
             Ok(s) => (s, String::new()),
             Err(e) => (
@@ -72,7 +71,7 @@ impl App {
         };
         let (host_tx, commands) = crossbeam_channel::bounded(8);
         let (events, host_rx) = crossbeam_channel::bounded(16);
-        let ctx = cc.egui_ctx.clone();
+        let host_ctx = ctx.clone();
         let host_worker = thread::spawn(move || {
             let mut host = None;
             while let Ok(command) = commands.recv() {
@@ -86,7 +85,7 @@ impl App {
                                 if settings.port == 0 {
                                     return Err("Choose a port from 1 to 65535".into());
                                 }
-                                let repaint = ctx.clone();
+                                let repaint = host_ctx.clone();
                                 Host::start(
                                     SocketAddrV4::new(ip, settings.port),
                                     settings.stream.clone(),
@@ -118,7 +117,7 @@ impl App {
                 if events.send(event).is_err() {
                     break;
                 }
-                ctx.request_repaint();
+                host_ctx.request_repaint();
             }
             drop(host);
         });
@@ -127,7 +126,7 @@ impl App {
             ..Default::default()
         }));
         let update_state = updates.clone();
-        let update_ctx = cc.egui_ctx.clone();
+        let update_ctx = ctx.clone();
         let (update_tx, commands) = crossbeam_channel::bounded(2);
         thread::spawn(move || {
             while let Ok(command) = commands.recv() {
@@ -159,24 +158,14 @@ impl App {
                     UpdateCommand::Install(available) => {
                         update_state.lock().unwrap().message =
                             "Downloading and verifying the update…".into();
-                        let result =
-                            std::env::current_exe()
-                                .map_err(|e| e.to_string())
-                                .and_then(|exe| {
-                                    let staged =
-                                        update::download(&available, &exe, |done, total| {
-                                            update_state.lock().unwrap().progress =
-                                                Some(done as f32 / total as f32);
-                                            update_ctx.request_repaint();
-                                        })?;
-                                    if let Err(e) =
-                                        update::launch_helper(&staged, &available.digest)
-                                    {
-                                        let _ = std::fs::remove_file(staged);
-                                        return Err(e);
-                                    }
-                                    Ok(())
-                                });
+                        let result = (|| {
+                            let mut prepared = update::download(&available, |done, total| {
+                                update_state.lock().unwrap().progress =
+                                    Some(done as f32 / total as f32);
+                                update_ctx.request_repaint();
+                            })?;
+                            update::launch_helper(&mut prepared)
+                        })();
                         let mut s = update_state.lock().unwrap();
                         match result {
                             Ok(()) => {
@@ -286,7 +275,7 @@ impl App {
             if let Some(available) = available
                 && self
                     .update_tx
-                    .try_send(UpdateCommand::Install(available))
+                    .try_send(UpdateCommand::Install(Box::new(available)))
                     .is_ok()
             {
                 self.updates.lock().unwrap().busy = true;
@@ -294,8 +283,11 @@ impl App {
         }
     }
 }
-impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
+impl host::Application for App {
+    fn close_requested(&self) -> bool {
+        self.updates.lock().unwrap().restart
+    }
+    fn logic(&mut self, ctx: &egui::Context) {
         while let Ok(event) = self.host_rx.try_recv() {
             self.busy = false;
             match event {
@@ -312,16 +304,19 @@ impl eframe::App for App {
                 HostEvent::Saved => self.message = "Settings saved.".into(),
             }
         }
-        let (available, restart) = {
-            let s = self.updates.lock().unwrap();
-            (
-                s.available.as_ref().map(|a| a.version.to_string()),
-                s.restart,
-            )
-        };
+        let restart = self.updates.lock().unwrap().restart;
         if restart {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
+    }
+    fn ui(&mut self, ctx: &egui::Context) {
+        let available = self
+            .updates
+            .lock()
+            .unwrap()
+            .available
+            .as_ref()
+            .map(|a| a.version.to_string());
         ui::header(ctx, &mut self.tab);
         egui::CentralPanel::default().frame(egui::Frame::new().fill(ui::BACKGROUND).inner_margin(24.0)).show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
@@ -351,27 +346,13 @@ impl Drop for App {
     }
 }
 
-fn main() -> eframe::Result {
+fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().is_some_and(|s| s == "--apply-update") {
-        if let Err(error) = update::apply_helper(&args[1..]) {
+        if let Err(error) = update::apply_helper() {
             update::record_helper_error(&error);
         }
         return Ok(());
     }
-    let event_loop =
-        winit::event_loop::EventLoop::<eframe::UserEvent>::with_user_event().build()?;
-    let native = eframe::create_native(
-        "SecondScreen",
-        eframe::NativeOptions {
-            viewport: egui::ViewportBuilder::default()
-                .with_inner_size([820.0, 760.0])
-                .with_min_inner_size([640.0, 540.0]),
-            ..Default::default()
-        },
-        Box::new(|cc| Ok(Box::new(App::new(cc)))),
-        &event_loop,
-    );
-    event_loop.run_app(&mut reactive::Reactive(native))?;
-    Ok(())
+    host::run(Box::new(|ctx| Box::new(App::new(ctx))))
 }

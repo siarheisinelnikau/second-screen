@@ -1,6 +1,6 @@
 //! Shared native UI components. Views emit actions; no filesystem, network or device I/O.
 use crate::{VERSION, capture::SourceKind, settings::Settings};
-use eframe::egui::{self, Color32, RichText};
+use egui::{Color32, RichText};
 
 pub const ACCENT: Color32 = Color32::from_rgb(106, 229, 189);
 pub const MUTED: Color32 = Color32::from_rgb(168, 188, 204);

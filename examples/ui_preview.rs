@@ -1,5 +1,4 @@
 //! Bounded offscreen rendering of real UI components. No window, app workers or I/O beyond PNGs.
-use eframe::egui;
 use egui_software_backend::{BufferMutRef, ColorFieldOrder, EguiSoftwareRender};
 use second_screen::{
     settings::Settings,
