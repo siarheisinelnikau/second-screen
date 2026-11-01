@@ -127,7 +127,17 @@
     "Invalid pairing request": "Invalid pairing request",
     "Enter a valid IPv4 address": "Enter a valid IPv4 address",
     "Choose a port from 1 to 65535": "Choose a port from 1 to 65535",
-    "Choose a private LAN IPv4 address or 127.0.0.1": "Choose a private LAN IPv4 address or 127.0.0.1"
+    "Choose a private LAN IPv4 address or 127.0.0.1": "Choose a private LAN IPv4 address or 127.0.0.1",
+    "Settings file is too large": "Settings file is too large",
+    "Stream settings exceed the supported limits": "Stream settings exceed the supported limits",
+    "Build with --features virtual-display on Windows to enable the experimental driver backend": "Build with --features virtual-display on Windows to enable the experimental driver backend",
+    "Virtual display backend is not enabled in this build": "Virtual display backend is not enabled in this build",
+    "SecondScreen virtual-display driver is not installed. See the driver build guide; this app never installs it.": "SecondScreen virtual-display driver is not installed. See the driver build guide; this app never installs it.",
+    "Virtual-display adapter is not ready": "Virtual-display adapter is not ready",
+    "Virtual display was removed": "Virtual display was removed",
+    "Unsupported virtual-display mode": "Unsupported virtual-display mode",
+    "Expected exactly one SecondScreen virtual adapter": "Expected exactly one SecondScreen virtual adapter",
+    "Driver list changed during enumeration; retry": "Driver list changed during enumeration; retry"
   },
   "ru": {
     "Connect": "Подключение",
@@ -257,7 +267,17 @@
     "Invalid pairing request": "Некорректный запрос подключения",
     "Enter a valid IPv4 address": "Введите корректный IPv4-адрес",
     "Choose a port from 1 to 65535": "Выберите порт от 1 до 65535",
-    "Choose a private LAN IPv4 address or 127.0.0.1": "Укажите локальный IPv4-адрес или 127.0.0.1"
+    "Choose a private LAN IPv4 address or 127.0.0.1": "Укажите локальный IPv4-адрес или 127.0.0.1",
+    "Settings file is too large": "Файл настроек слишком большой",
+    "Stream settings exceed the supported limits": "Параметры трансляции выходят за допустимые пределы",
+    "Build with --features virtual-display on Windows to enable the experimental driver backend": "Для экспериментального драйвера нужна сборка Windows с --features virtual-display",
+    "Virtual display backend is not enabled in this build": "Виртуальный экран недоступен в этой сборке",
+    "SecondScreen virtual-display driver is not installed. See the driver build guide; this app never installs it.": "Драйвер виртуального экрана SecondScreen не установлен. См. руководство по сборке драйвера; приложение не устанавливает его.",
+    "Virtual-display adapter is not ready": "Адаптер виртуального экрана не готов",
+    "Virtual display was removed": "Виртуальный экран удалён",
+    "Unsupported virtual-display mode": "Режим виртуального экрана не поддерживается",
+    "Expected exactly one SecondScreen virtual adapter": "Ожидается ровно один виртуальный адаптер SecondScreen",
+    "Driver list changed during enumeration; retry": "Список драйверов изменился; повторите попытку"
   },
   "fr": {
     "Connect": "Connexion",
@@ -387,7 +407,17 @@
     "Invalid pairing request": "Demande d'association non valide",
     "Enter a valid IPv4 address": "Saisissez une adresse IPv4 valide",
     "Choose a port from 1 to 65535": "Choisissez un port de 1 à 65535",
-    "Choose a private LAN IPv4 address or 127.0.0.1": "Choisissez une adresse IPv4 privée ou 127.0.0.1"
+    "Choose a private LAN IPv4 address or 127.0.0.1": "Choisissez une adresse IPv4 privée ou 127.0.0.1",
+    "Settings file is too large": "Le fichier de paramètres est trop volumineux",
+    "Stream settings exceed the supported limits": "Les paramètres de diffusion dépassent les limites prises en charge",
+    "Build with --features virtual-display on Windows to enable the experimental driver backend": "Le pilote expérimental nécessite une compilation Windows avec --features virtual-display",
+    "Virtual display backend is not enabled in this build": "L'écran virtuel n'est pas activé dans cette version",
+    "SecondScreen virtual-display driver is not installed. See the driver build guide; this app never installs it.": "Le pilote d'écran virtuel SecondScreen n'est pas installé. Consultez son guide de compilation ; l'application ne l'installe jamais.",
+    "Virtual-display adapter is not ready": "L'adaptateur d'écran virtuel n'est pas prêt",
+    "Virtual display was removed": "L'écran virtuel a été retiré",
+    "Unsupported virtual-display mode": "Mode d'écran virtuel non pris en charge",
+    "Expected exactly one SecondScreen virtual adapter": "Un seul adaptateur virtuel SecondScreen est attendu",
+    "Driver list changed during enumeration; retry": "La liste des pilotes a changé ; réessayez"
   },
   "de": {
     "Connect": "Verbinden",
@@ -517,7 +547,17 @@
     "Invalid pairing request": "Ungültige Kopplungsanfrage",
     "Enter a valid IPv4 address": "Geben Sie eine gültige IPv4-Adresse ein",
     "Choose a port from 1 to 65535": "Wählen Sie einen Port von 1 bis 65535",
-    "Choose a private LAN IPv4 address or 127.0.0.1": "Wählen Sie eine private IPv4-Adresse oder 127.0.0.1"
+    "Choose a private LAN IPv4 address or 127.0.0.1": "Wählen Sie eine private IPv4-Adresse oder 127.0.0.1",
+    "Settings file is too large": "Einstellungsdatei ist zu groß",
+    "Stream settings exceed the supported limits": "Übertragungseinstellungen überschreiten die unterstützten Grenzen",
+    "Build with --features virtual-display on Windows to enable the experimental driver backend": "Der experimentelle Treiber erfordert einen Windows-Build mit --features virtual-display",
+    "Virtual display backend is not enabled in this build": "Virtueller Bildschirm ist in diesem Build nicht aktiviert",
+    "SecondScreen virtual-display driver is not installed. See the driver build guide; this app never installs it.": "Der virtuelle SecondScreen-Anzeigetreiber ist nicht installiert. Siehe Treiber-Bauanleitung; die App installiert ihn niemals.",
+    "Virtual-display adapter is not ready": "Virtueller Anzeigeadapter ist nicht bereit",
+    "Virtual display was removed": "Virtueller Bildschirm wurde entfernt",
+    "Unsupported virtual-display mode": "Nicht unterstützter virtueller Anzeigemodus",
+    "Expected exactly one SecondScreen virtual adapter": "Genau ein virtueller SecondScreen-Adapter wird erwartet",
+    "Driver list changed during enumeration; retry": "Treiberliste wurde geändert; erneut versuchen"
   },
   "es": {
     "Connect": "Conectar",
@@ -647,7 +687,17 @@
     "Invalid pairing request": "Solicitud de emparejamiento no válida",
     "Enter a valid IPv4 address": "Introduce una dirección IPv4 válida",
     "Choose a port from 1 to 65535": "Elige un puerto entre 1 y 65535",
-    "Choose a private LAN IPv4 address or 127.0.0.1": "Elige una dirección IPv4 privada o 127.0.0.1"
+    "Choose a private LAN IPv4 address or 127.0.0.1": "Elige una dirección IPv4 privada o 127.0.0.1",
+    "Settings file is too large": "El archivo de ajustes es demasiado grande",
+    "Stream settings exceed the supported limits": "Los ajustes de transmisión superan los límites admitidos",
+    "Build with --features virtual-display on Windows to enable the experimental driver backend": "El controlador experimental requiere una compilación Windows con --features virtual-display",
+    "Virtual display backend is not enabled in this build": "La pantalla virtual no está habilitada en esta compilación",
+    "SecondScreen virtual-display driver is not installed. See the driver build guide; this app never installs it.": "El controlador virtual SecondScreen no está instalado. Consulta su guía de compilación; la aplicación nunca lo instala.",
+    "Virtual-display adapter is not ready": "El adaptador de pantalla virtual no está listo",
+    "Virtual display was removed": "Se eliminó la pantalla virtual",
+    "Unsupported virtual-display mode": "Modo de pantalla virtual no compatible",
+    "Expected exactly one SecondScreen virtual adapter": "Se esperaba un único adaptador virtual SecondScreen",
+    "Driver list changed during enumeration; retry": "La lista de controladores cambió; inténtalo de nuevo"
   },
   "it": {
     "Connect": "Connetti",
@@ -777,6 +827,16 @@
     "Invalid pairing request": "Richiesta di abbinamento non valida",
     "Enter a valid IPv4 address": "Inserisci un indirizzo IPv4 valido",
     "Choose a port from 1 to 65535": "Scegli una porta da 1 a 65535",
-    "Choose a private LAN IPv4 address or 127.0.0.1": "Scegli un indirizzo IPv4 privato o 127.0.0.1"
+    "Choose a private LAN IPv4 address or 127.0.0.1": "Scegli un indirizzo IPv4 privato o 127.0.0.1",
+    "Settings file is too large": "Il file delle impostazioni è troppo grande",
+    "Stream settings exceed the supported limits": "Le impostazioni di trasmissione superano i limiti supportati",
+    "Build with --features virtual-display on Windows to enable the experimental driver backend": "Il driver sperimentale richiede una build Windows con --features virtual-display",
+    "Virtual display backend is not enabled in this build": "Lo schermo virtuale non è abilitato in questa build",
+    "SecondScreen virtual-display driver is not installed. See the driver build guide; this app never installs it.": "Il driver schermo virtuale SecondScreen non è installato. Consulta la guida di compilazione; l'app non lo installa mai.",
+    "Virtual-display adapter is not ready": "L'adattatore schermo virtuale non è pronto",
+    "Virtual display was removed": "Lo schermo virtuale è stato rimosso",
+    "Unsupported virtual-display mode": "Modalità schermo virtuale non supportata",
+    "Expected exactly one SecondScreen virtual adapter": "È previsto un solo adattatore virtuale SecondScreen",
+    "Driver list changed during enumeration; retry": "L'elenco dei driver è cambiato; riprova"
   }
 }

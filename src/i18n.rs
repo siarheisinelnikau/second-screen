@@ -106,7 +106,16 @@ impl Message {
             &self
                 .values
                 .iter()
-                .map(|(name, value)| (*name, value.as_str()))
+                .map(|(name, value)| {
+                    (
+                        *name,
+                        if *name == "detail" {
+                            tr(language, value)
+                        } else {
+                            value.as_str()
+                        },
+                    )
+                })
                 .collect::<Vec<_>>(),
         )
     }

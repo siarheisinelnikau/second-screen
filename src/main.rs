@@ -278,6 +278,10 @@ impl App {
             ui::apply_theme(surface.ctx(), self.settings.theme);
             self.send_host(HostCommand::Save(self.settings.clone()));
         }
+        let message = self.message.render(self.settings.language);
+        if !message.is_empty() {
+            surface.label(message);
+        }
         let view = {
             let s = self.updates.lock().unwrap();
             UpdateView {

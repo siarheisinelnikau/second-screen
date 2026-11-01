@@ -5,7 +5,7 @@ function preference(name, fallback) { try { return localStorage.getItem(`SecondS
 let language = preference("language", "en"), theme = preference("theme", "dark");
 if (!["en", "ru", "fr", "de", "es", "it"].includes(language)) language = "en";
 if (!["light", "dark"].includes(theme)) theme = "dark";
-const t = (key, values = {}) => Object.entries(values).reduce((text, [name, value]) => text.replaceAll(`{${name}}`, String(value)), catalogs[language]?.[key] || key);
+const t = (key, values = {}) => (catalogs[language]?.[key] || key).replace(/\{([a-z]+)\}/g, (placeholder, name) => Object.hasOwn(values, name) ? String(values[name]) : placeholder);
 let token = null, running = false, controller = null, objectUrl = null, state = null, frameSize = null;
 let status = { key: "Disconnected", values: {} }, errorDetail = "";
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
