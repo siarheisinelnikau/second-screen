@@ -8,6 +8,7 @@ This release adds language and appearance preferences to the Windows host and em
 - A Settings page with saved Language and Light/Dark controls. Changing either preference applies immediately without restarting, disconnecting the tablet or changing the stream settings.
 - Matching language and appearance selectors in the tablet viewer. Browser preferences are independent of the host and persist locally when browser storage is available.
 - A light palette with readable text, forms, selection, warning and error colors; the existing dark palette remains the default.
+- Explicit appearance choices remain selected when Windows changes its own light/dark mode.
 
 ## Improved
 
