@@ -4,6 +4,7 @@ mod host;
 
 use second_screen::{
     VERSION,
+    i18n::{self, Message, tr},
     server::{Host, Shared},
     settings::{self, Settings},
     ui::{self, ConnectAction, HostView, UpdateView},
@@ -33,7 +34,7 @@ enum UpdateCommand {
 }
 #[derive(Default)]
 struct UpdateState {
-    message: String,
+    message: Message,
     busy: bool,
     available: Option<Available>,
     progress: Option<f32>,
@@ -49,7 +50,7 @@ struct App {
     updates: Arc<Mutex<UpdateState>>,
     shared: Option<Arc<Shared>>,
     address: String,
-    message: String,
+    message: Message,
     busy: bool,
     trusted_network: bool,
     tab: u8,
@@ -58,17 +59,21 @@ struct App {
 
 impl App {
     fn new(ctx: &egui::Context) -> Self {
-        ui::apply_theme(ctx);
         let (settings, message) = match settings::load(&settings::path()) {
-            Ok(s) => (s, String::new()),
+            Ok(s) => (s, Message::default()),
             Err(e) => (
                 Settings {
                     startup_updates: false,
                     ..Default::default()
                 },
-                format!("{e}. Defaults loaded; startup update check skipped."),
+                Message::with(
+                    "{detail}. Defaults loaded; startup update check skipped.",
+                    "detail",
+                    e,
+                ),
             ),
         };
+        ui::apply_theme(ctx, settings.theme);
         let (host_tx, commands) = crossbeam_channel::bounded(8);
         let (events, host_rx) = crossbeam_channel::bounded(16);
         let host_ctx = ctx.clone();
@@ -122,7 +127,9 @@ impl App {
             drop(host);
         });
         let updates = Arc::new(Mutex::new(UpdateState {
-            message: "No update check yet. Repository and releases may not be published.".into(),
+            message: Message::new(
+                "No update check yet. Repository and releases may not be published.",
+            ),
             ..Default::default()
         }));
         let update_state = updates.clone();
@@ -142,22 +149,28 @@ impl App {
                         let mut s = update_state.lock().unwrap();
                         match result {
                             Ok(Some(available)) => {
-                                s.message = format!("Version {} is available.", available.version);
+                                s.message = Message::with(
+                                    "Version {version} is available.",
+                                    "version",
+                                    available.version.to_string(),
+                                );
                                 s.available = Some(available);
                             }
                             Ok(None) => {
-                                s.message = "You have the latest published stable version.".into();
+                                s.message =
+                                    Message::new("You have the latest published stable version.");
                                 s.available = None;
                             }
                             Err(e) => {
-                                s.message = e;
+                                s.message =
+                                    Message::with("Update check failed: {detail}", "detail", e);
                                 s.available = None;
                             }
                         }
                     }
                     UpdateCommand::Install(available) => {
                         update_state.lock().unwrap().message =
-                            "Downloading and verifying the update…".into();
+                            Message::new("Downloading and verifying the update…");
                         let result = (|| {
                             let mut prepared = update::download(&available, |done, total| {
                                 update_state.lock().unwrap().progress =
@@ -170,9 +183,16 @@ impl App {
                         match result {
                             Ok(()) => {
                                 s.restart = true;
-                                s.message = "Restarting to install the verified update…".into();
+                                s.message =
+                                    Message::new("Restarting to install the verified update…");
                             }
-                            Err(e) => s.message = e,
+                            Err(e) => {
+                                s.message = Message::with(
+                                    "Update installation failed: {detail}",
+                                    "detail",
+                                    e,
+                                )
+                            }
                         }
                     }
                 }
@@ -207,7 +227,7 @@ impl App {
     fn send_host(&mut self, command: HostCommand) {
         match self.host_tx.try_send(command) {
             Ok(()) => self.busy = true,
-            Err(_) => self.message = "Host worker is busy; try again shortly.".into(),
+            Err(_) => self.message = Message::new("Host worker is busy; try again shortly."),
         }
     }
     fn host_ui(&mut self, surface: &mut egui::Ui) {
@@ -223,13 +243,14 @@ impl App {
                 error: s.error.clone(),
             }
         });
+        let message = self.message.render(self.settings.language);
         let actions = ui::connect(
             surface,
             &mut self.settings,
             &mut self.trusted_network,
             host.as_ref(),
             self.busy,
-            &self.message,
+            &message,
         );
         for action in actions {
             match action {
@@ -253,17 +274,26 @@ impl App {
         }
     }
     fn update_ui(&mut self, surface: &mut egui::Ui) {
+        if ui::preferences(surface, &mut self.settings) {
+            ui::apply_theme(surface.ctx(), self.settings.theme);
+            self.send_host(HostCommand::Save(self.settings.clone()));
+        }
         let view = {
             let s = self.updates.lock().unwrap();
             UpdateView {
-                message: s.message.clone(),
+                message: s.message.render(self.settings.language),
                 busy: s.busy,
                 available: s.available.as_ref().map(|a| a.version.to_string()),
                 progress: s.progress,
                 installer_error: self.installer_error.clone(),
             }
         };
-        let actions = ui::updates(surface, &mut self.settings.startup_updates, &view);
+        let actions = ui::updates(
+            surface,
+            &mut self.settings.startup_updates,
+            &view,
+            self.settings.language,
+        );
         if actions.save {
             self.send_host(HostCommand::Save(self.settings.clone()));
         }
@@ -298,10 +328,13 @@ impl host::Application for App {
                 }
                 HostEvent::Stopped => {
                     self.shared = None;
-                    self.message = "Sharing stopped. Tokens revoked and capture released.".into();
+                    self.message =
+                        Message::new("Sharing stopped. Tokens revoked and capture released.");
                 }
-                HostEvent::Error(e) => self.message = e,
-                HostEvent::Saved => self.message = "Settings saved.".into(),
+                HostEvent::Error(e) => {
+                    self.message = Message::with("Operation failed: {detail}", "detail", e)
+                }
+                HostEvent::Saved => self.message = Message::new("Settings saved."),
             }
         }
         let restart = self.updates.lock().unwrap().restart;
@@ -317,20 +350,21 @@ impl host::Application for App {
             .available
             .as_ref()
             .map(|a| a.version.to_string());
-        ui::header(ctx, &mut self.tab);
-        egui::CentralPanel::default().frame(egui::Frame::new().fill(ui::BACKGROUND).inner_margin(24.0)).show(ctx, |ui| {
+        let language = self.settings.language;
+        ui::header(ctx, &mut self.tab, language);
+        egui::CentralPanel::default().frame(egui::Frame::new().fill(ctx.style().visuals.panel_fill).inner_margin(24.0)).show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
-                if let Some(version) = available && ui.button(format!("Update {version} available — open Updates")).clicked() { self.tab = 1; }
+                if let Some(version) = available && ui.button(i18n::format(language, "Update {version} available — open Settings", &[("version", &version)])).clicked() { self.tab = 1; }
                 match self.tab {
                     0 => self.host_ui(ui),
                     1 => self.update_ui(ui),
                     _ => {
-                        ui.heading("Room for another perspective.");
-                        ui.label("SecondScreen is an independent, open-source local desktop viewer. No account, cloud relay or remote input.");
-                        ui.label("Primary monitor mode mirrors an existing screen. The experimental virtual-display backend requires a separately built, signed and installed SecondScreen IddCx/UMDF driver. It creates a monitor only after explicit pairing/approval and removes it on disconnect. End-to-end driver validation is pending; Windows desktop arrangement is never changed automatically.");
-                        ui.label("The capture path and tablet compatibility still require manual validation. GDI may not capture protected content, the secure desktop or the cursor.");
-                        ui.label(format!("Version {VERSION} · MIT License"));
-                        ui.hyperlink_to("Project repository (planned; may be unavailable)", "https://github.com/siarheisinelnikau/second-screen");
+                        ui.heading(tr(language, "Room for another perspective."));
+                        ui.label(tr(language, "SecondScreen is an independent, open-source local desktop viewer. No account, cloud relay or remote input."));
+                        ui.label(tr(language, "Primary monitor mode mirrors an existing screen. The experimental virtual-display backend requires a separately built, signed and installed SecondScreen IddCx/UMDF driver. It creates a monitor only after explicit pairing/approval and removes it on disconnect. End-to-end driver validation is pending; Windows desktop arrangement is never changed automatically."));
+                        ui.label(tr(language, "The capture path and tablet compatibility still require manual validation. GDI may not capture protected content, the secure desktop or the cursor."));
+                        ui.label(i18n::format(language, "Version {version} · MIT License", &[("version", VERSION)]));
+                        ui.hyperlink_to(tr(language, "Project repository"), "https://github.com/siarheisinelnikau/second-screen");
                     }
                 }
             });

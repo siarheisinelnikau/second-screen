@@ -426,6 +426,17 @@ fn route(request: Request, ip: IpAddr, address: SocketAddr, shared: &Shared) -> 
                 include_bytes!("../viewer/viewer.js").as_slice(),
             );
         }
+        ("GET", "/locales.js") => {
+            return Reply::bytes(
+                200,
+                "text/javascript; charset=utf-8",
+                format!(
+                    "const SECOND_SCREEN_LOCALES = {};",
+                    include_str!("locales.json")
+                )
+                .into_bytes(),
+            );
+        }
         ("GET", "/style.css") => {
             return Reply::bytes(
                 200,

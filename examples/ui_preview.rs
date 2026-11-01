@@ -25,7 +25,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ("driver-missing", 820, 760, 4),
     ] {
         let ctx = egui::Context::default();
-        ui::apply_theme(&ctx);
+        ui::apply_theme(&ctx, Default::default());
         let mut renderer = EguiSoftwareRender::new(ColorFieldOrder::Rgba);
         let mut pixels = vec![[0u8; 4]; width * height];
         let mut settings = Settings {
@@ -69,13 +69,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ..Default::default()
                 },
                 |ctx| {
-                    ui::header(ctx, &mut tab);
+                    ui::header(ctx, &mut tab, settings.language);
                     egui::CentralPanel::default()
                         .frame(egui::Frame::new().fill(ui::BACKGROUND).inner_margin(24.0))
                         .show(ctx, |surface| {
                             egui::ScrollArea::vertical().show(surface, |surface| {
                                 if scenario == 2 {
-                                    ui::updates(surface, &mut settings.startup_updates, &update);
+                                    ui::preferences(surface, &mut settings);
+                                    ui::updates(
+                                        surface,
+                                        &mut settings.startup_updates,
+                                        &update,
+                                        settings.language,
+                                    );
                                 } else {
                                     ui::connect(
                                         surface,
