@@ -92,7 +92,9 @@ pub fn decode_frame(
         return Err("Invalid virtual-display frame sequence or payload".into());
     }
     let rgb = bytes[HEADER..]
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .flat_map(|pixel| [pixel[2], pixel[1], pixel[0]])
         .collect();
     let image =
