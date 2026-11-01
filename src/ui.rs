@@ -268,7 +268,11 @@ pub fn connect(
         if let Some(error) = &host.error {
             ui.colored_label(
                 error_color(ui),
-                i18n::format(language, "Sharing error: {detail}", &[("detail", error)]),
+                i18n::format(
+                    language,
+                    "Sharing error: {detail}",
+                    &[("detail", tr(language, error))],
+                ),
             );
             note(
                 ui,
@@ -422,7 +426,7 @@ pub fn updates(
             i18n::format(
                 language,
                 "Last installer error: {detail}",
-                &[("detail", error)],
+                &[("detail", tr(language, error))],
             ),
         );
     }

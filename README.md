@@ -2,7 +2,9 @@
 
 An independent Windows host and embedded tablet/browser viewer. Rust, native desktop controls, one portable host EXE, no account or cloud relay. MIT licensed; not affiliated with Duet.
 
-**Version 0.2.0 adds an experimental virtual-display backend and driver sources.** Default builds remain mirroring/synthetic-only. The opt-in backend creates a genuine IddCx monitor after tablet approval and streams that target's surfaces; Windows desktop arrangement stays under your control. The complete driver could not be built here because WDK is absent, so real desktop extension is not yet verified. See [driver build/status](driver/README.md) and [validation](docs/DRIVER_VALIDATION.md).
+**Version 0.3.0 adds English, Russian, French, German, Spanish and Italian interfaces and saved Light/Dark preferences in both the host and tablet viewer.**
+
+The experimental virtual-display backend and driver sources remain available. Default builds remain mirroring/synthetic-only. The opt-in backend creates a genuine IddCx monitor after tablet approval and streams that target's surfaces; Windows desktop arrangement stays under your control. The complete driver could not be built here because WDK is absent, so real desktop extension is not yet verified. See [driver build/status](driver/README.md) and [validation](docs/DRIVER_VALIDATION.md).
 
 ## What is implemented
 
@@ -27,24 +29,26 @@ node --test tests/viewer.test.cjs
 ./scripts/package.ps1 -Offline
 ```
 
-Omit `-Offline` on a clean development computer that needs dependencies. Cargo is limited to two jobs and repository-local `target` output. Packaging links the MSVC runtime statically and produces `dist/SecondScreen-v0.2.0.exe` and `dist/SHA256SUMS`. The EXE embeds the viewer, not a driver package; ship its license notices too. To build the experimental selector, use `./scripts/package.ps1 -Offline -VirtualDisplay`. It still never opens/installs a driver during compilation.
+Omit `-Offline` on a clean development computer that needs dependencies. Cargo is limited to two jobs and repository-local `target` output. Packaging links the MSVC runtime statically and produces `dist/SecondScreen-v0.3.0.exe` and `dist/SHA256SUMS`. The EXE embeds the viewer, not a driver package; ship its license notices too. To build the experimental selector, use `./scripts/package.ps1 -Offline -VirtualDisplay`. It still never opens/installs a driver during compilation.
 
 `./scripts/generate-notices.ps1 -Offline` regenerates the locked Windows dependency inventory and available code/font license texts. The inventory explicitly marks upstream archives missing standalone code-license texts. Resolve those notices and review font attribution before public distribution; this local build is not a publication-ready release.
 
 ## Use after manual validation
 
-1. Launch the packaged EXE. Sharing starts off; startup update checking runs in the background unless disabled in **Updates**.
+1. Launch the packaged EXE. Sharing starts off; startup update checking runs in the background unless disabled in **Settings → Updates**.
 2. In **Connect**, select **Test connection** first. Enter the computer's RFC1918 private LAN IPv4 address. The default `127.0.0.1` is local to the host and cannot be opened on a tablet. IPv6, hostnames and wildcard binding are not supported.
 3. Choose a picture preset; detailed controls are optional. Acknowledge the HTTP limitation and click **Start sharing**. Firewall access, if needed, must be configured by the user; the application does not alter firewall rules.
 4. On a tablet on the same trusted network, open the exact `http://IP:PORT` address shown. Enter the code within five minutes. Check the requesting IP on the host and click **Approve viewer and start capture**.
 5. For mirroring, stop, choose **Mirror monitor**, start again and pair again. Only approval starts capture. Dimensions are limits, not a physical display mode change; aspect ratio is retained without upscaling.
 6. Use **Disconnect** in either application to revoke access, or **Stop sharing** to close the listener. The last frame is cleared on disconnect. An abandoned viewer expires after 15 seconds without authenticated requests; a pending request has a 60-second maximum approval window.
 
-Settings are saved by **Save settings** and immediately when changing the startup-update toggle. Storage: `%LOCALAPPDATA%/SecondScreen/settings.json`. Tokens and pairing codes are never persisted. Stream changes apply on the next start. A browser reload requires pairing again.
+Open **Settings** to choose **Language** (English, Русский, Français, Deutsch, Español, Italiano) and **Appearance → Light / Dark**. Changes apply immediately and save automatically. The tablet viewer has matching language and appearance selectors above its pairing form; its choices are saved in that browser independently of the host. English and Dark remain the defaults for existing installations. No restart or re-pairing is required when changing either preference.
+
+Connection settings are saved by **Save settings** and immediately when changing the startup-update toggle. Storage: `%LOCALAPPDATA%/SecondScreen/settings.json`. Tokens and pairing codes are never persisted. Stream changes apply on the next start. A browser reload requires pairing again.
 
 ## Updates and distribution status
 
-The planned canonical repository is [siarheisinelnikau/second-screen](https://github.com/siarheisinelnikau/second-screen). It has **not been published by this task**. A missing repository/release, network error or rate limit is shown as an unavailable check, not as an up-to-date installation. Startup failures remain on the Updates page without a dialog.
+The canonical repository is [siarheisinelnikau/second-screen](https://github.com/siarheisinelnikau/second-screen). A missing repository/release, network error or rate limit is shown as an unavailable check, not as an up-to-date installation. Startup failures remain on the Updates page without a dialog.
 
 Only stable semantic versions and the official Windows x64 asset `SecondScreen-vVERSION.exe` are accepted. A matching SHA-256 checksum entry or valid GitHub asset digest is required, HTTPS redirects stay HTTPS, file size is bounded and the PE architecture is checked. Installation is always initiated by the user. Keep the portable EXE in a writable folder: the application will not elevate. The helper waits for a verified parent process to exit before replacing it, keeps a recovery backup, attempts rollback if replacement/relaunch fails and leaves settings untouched. The installed filename is preserved. See [update design and recovery](docs/ARCHITECTURE.md#portable-updates).
 
@@ -54,15 +58,19 @@ The `virtual-display` feature implements `ExtendedDisplayProvider` with real dev
 
 ## Screenshots
 
-These images render the real shared application components with isolated fixtures in an offscreen CPU test harness. They were produced without a window, computer use, network, user settings or devices. The production host now uses the same CPU rasterizer and presents through softbuffer/Win32 GDI. These captures verify client-area layout, not window chrome, input behavior or idle performance. Real native-window and connected-tablet screenshots remain pending.
+These v0.2.0 images render the real shared application components with isolated fixtures in an offscreen CPU test harness. They were produced without a window, computer use, network, user settings or devices. The production host now uses the same CPU rasterizer and presents through softbuffer/Win32 GDI. These captures verify client-area layout, not window chrome, input behavior or idle performance. Real native-window and connected-tablet screenshots remain pending.
 
 ![Connect screen with the experimental selector, offscreen fixture at 820 by 760](docs/screenshots/connect.png)
 
 ![Updates settings, offscreen fixture at 820 by 760](docs/screenshots/updates.png)
 
-Regenerate six bounded fixture views with `./scripts/render-previews.ps1`. The harness shares `src/ui.rs` with the native host, renders four finite frames per image and exits under an external 30-second timeout. It does not start the application workers or call GDI/D3D/device APIs.
+The current settings and localized/light-theme screenshots are pending: repository instructions prohibit screenshot generation and application launch during this code-only task. The images above document the previous English/dark layout and do not show the new preferences.
+
+When screenshot capture is permitted, regenerate six bounded fixture views with `./scripts/render-previews.ps1`. The harness shares `src/ui.rs` with the native host, renders four finite frames per image and exits under an external 30-second timeout. It does not start the application workers or call GDI/D3D/device APIs.
 
 ## Verification
+
+For v0.3.0, formatting and strict Clippy passed for the default and `virtual-display` configurations. Default Rust tests passed (13 library and 2 host tests); the feature-enabled all-target suite passed (15 library and 2 host tests). Two socket-binding tests remained deliberately ignored. The synthetic C++ driver-core tests and explicit Rust mailbox-decoding fixture also passed. All 5 viewer tests passed, including immediate preference changes, browser persistence, catalog coverage and the existing approval/revocation checks. Catalog tests cover all 138 messages in six languages, parameter preservation and legacy settings migration. No native application, browser, LAN listener, real capture source, driver or updater was launched for these checks.
 
 The synthetic tests cover pairing/approval, token revocation, expiry, request bounds, cross-origin/Host rejection, JPEG encode/decode, the complete in-memory HTTP route and persistent update opt-out. Node tests exercise the viewer's approval gate, Authorization header and frame cleanup with an artificial DOM. A separate loopback TCP integration test is opt-in because this development sandbox denied loopback connections:
 
@@ -70,7 +78,7 @@ The synthetic tests cover pairing/approval, token revocation, expiry, request bo
 cargo test --locked --lib loopback_synthetic_transport -- --ignored --nocapture
 ```
 
-That command uses only loopback and synthetic pixels, never LAN binding or screen capture. Compilation alone does not establish Windows capture, browser compatibility, idle CPU use or installation correctness. See [original mirroring validation](docs/VALIDATION.md), [driver validation](docs/DRIVER_VALIDATION.md), [architecture](docs/ARCHITECTURE.md), [current release-note draft](docs/RELEASE_NOTES_0.2.0.md), and [third-party notices](THIRD_PARTY_NOTICES.md).
+That command uses only loopback and synthetic pixels, never LAN binding or screen capture. Compilation alone does not establish Windows capture, browser compatibility, idle CPU use or installation correctness. See [original mirroring validation](docs/VALIDATION.md), [driver validation](docs/DRIVER_VALIDATION.md), [architecture](docs/ARCHITECTURE.md), [current release notes](docs/RELEASE_NOTES_0.3.0.md), and [third-party notices](THIRD_PARTY_NOTICES.md).
 
 The v0.2.0 experimental host package built successfully (8,135,168 bytes). `python scripts/inspect_pe.py dist/SecondScreen-v0.2.0.exe` passed x64 GUI PE/import/digest checks without executing it. Python is an optional development tool. The driver tests separately compile the SDK readback module and verify the actual C++ mailbox output with Rust; this does not replace a complete WDK build/device check.
 
@@ -83,4 +91,4 @@ The control window uses egui software rasterization and softbuffer's Win32 GDI p
 
 Original multi-size executable and runtime window icons are now supplied. After packaging, `./scripts/inspect-icons.ps1` loads the EXE as resource data and renders 16–256 pixel icons without executing the application. Optional `SECOND_SCREEN_RENDER_METRICS` writes aggregate logic/layout/raster/present counts on normal exit for later runtime diagnostics.
 
-This audit used source inspection, isolated fixture tests and packaged resource loading. Native-window launch, OS taskbar identity, visible/minimized/restore frame counts, CPU/GPU load and subjective responsiveness remain unverified in this code-only session. Existing real component captures above remain accurate; native host and connected-tablet screenshots still require the separately authorized device/UI validation.
+This audit used source inspection, isolated fixture tests and packaged resource loading. Native-window launch, OS taskbar identity, visible/minimized/restore frame counts, CPU/GPU load and subjective responsiveness remain unverified in this code-only session. Existing real component captures above show the previous English/dark interface; native host and connected-tablet screenshots still require the separately authorized device/UI validation.
