@@ -1,4 +1,5 @@
 use crate::capture::StreamConfig;
+use crate::i18n::Language;
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -8,6 +9,8 @@ use std::{
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
+    pub language: Language,
+    pub theme: Theme,
     pub startup_updates: bool,
     pub bind_ip: String,
     pub port: u16,
@@ -16,12 +19,21 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            language: Language::default(),
+            theme: Theme::default(),
             startup_updates: true,
             bind_ip: "127.0.0.1".into(),
             port: 7420,
             stream: StreamConfig::default(),
         }
     }
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Theme {
+    Light,
+    #[default]
+    Dark,
 }
 pub fn path() -> PathBuf {
     std::env::var_os("LOCALAPPDATA")
@@ -58,6 +70,30 @@ pub fn save(path: &Path, settings: &Settings) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn legacy_settings_preserve_connection_and_gain_safe_preferences() {
+        let old = r#"{"startup_updates":false,"bind_ip":"192.168.1.20","port":8123}"#;
+        let settings: Settings = serde_json::from_str(old).unwrap();
+        assert_eq!(settings.language, Language::English);
+        assert_eq!(settings.theme, Theme::Dark);
+        assert_eq!(settings.bind_ip, "192.168.1.20");
+        assert_eq!(settings.port, 8123);
+        assert!(!settings.startup_updates);
+    }
+    #[test]
+    fn language_and_theme_survive_save_and_reload() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("settings.json");
+        let settings = Settings {
+            language: Language::Italian,
+            theme: Theme::Light,
+            ..Default::default()
+        };
+        save(&file, &settings).unwrap();
+        let restored = load(&file).unwrap();
+        assert_eq!(restored.language, Language::Italian);
+        assert_eq!(restored.theme, Theme::Light);
+    }
     #[test]
     fn startup_opt_out_survives_atomic_replacement() {
         fs::create_dir_all(".test-output").unwrap();

@@ -1,4 +1,5 @@
 pub mod capture;
+pub mod i18n;
 pub mod pairing;
 pub mod server;
 pub mod settings;
