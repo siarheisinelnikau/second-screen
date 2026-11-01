@@ -38,6 +38,10 @@ fn error_color(ui: &egui::Ui) -> Color32 {
 }
 
 pub fn apply_theme(ctx: &egui::Context, theme: Theme) {
+    ctx.set_theme(match theme {
+        Theme::Dark => egui::Theme::Dark,
+        Theme::Light => egui::Theme::Light,
+    });
     let mut style = (*ctx.style()).clone();
     style.visuals = match theme {
         Theme::Dark => egui::Visuals::dark(),
@@ -431,4 +435,35 @@ pub fn updates(
         );
     }
     actions
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn explicit_appearance_survives_opposite_system_theme_and_mode_changes() {
+        let ctx = egui::Context::default();
+        for requested in [Theme::Light, Theme::Dark, Theme::Light] {
+            apply_theme(&ctx, requested);
+            for system in [egui::Theme::Dark, egui::Theme::Light] {
+                let _ = ctx.run(
+                    egui::RawInput {
+                        system_theme: Some(system),
+                        ..Default::default()
+                    },
+                    |ctx| {
+                        assert_eq!(ctx.style().visuals.dark_mode, requested == Theme::Dark);
+                        assert_eq!(
+                            ctx.style().visuals.panel_fill,
+                            match requested {
+                                Theme::Dark => BACKGROUND,
+                                Theme::Light => Color32::from_rgb(243, 248, 246),
+                            }
+                        );
+                    },
+                );
+            }
+        }
+    }
 }
