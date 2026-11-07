@@ -1,0 +1,42 @@
+name: Checked release builds
+'on':
+  workflow_call: {}
+permissions:
+  contents: read
+env:
+  CARGO_BUILD_JOBS: '2'
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+    - name: Provision shared updater source
+      shell: pwsh
+      run: ./scripts/provision-shared-updater.ps1
+    - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+      with:
+        components: rustfmt, clippy
+        toolchain: stable
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version: '22'
+    - run: cargo fmt --all -- --check
+    - run: cargo clippy --locked --all-targets -j 2 -- -D warnings
+    - run: cargo test --locked -j 2
+    - run: cargo clippy --locked --all-targets --features virtual-display -j 2 -- -D warnings
+    - run: cargo test --locked --features virtual-display -j 2
+    - run: ./scripts/test-driver-core.ps1
+    - run: cargo test --locked --features virtual-display -j 2 decodes_actual_cpp_mailbox_fixture -- --ignored
+    - run: node --test tests/viewer.test.cjs
+    - run: ./scripts/package.ps1
+    - run: python scripts/inspect_pe.py (Get-ChildItem dist -Filter 'SecondScreen-v*.exe' | Select-Object -First
+        1).FullName --output dist/verification.json
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+      with:
+        name: SecondScreen-windows-portable
+        path: dist/
+    permissions:
+      contents: read
+    timeout-minutes: 30

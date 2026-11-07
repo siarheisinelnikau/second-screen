@@ -1,0 +1,14 @@
+{
+  "repository": "siarheisinelnikau/second-screen",
+  "product": "SecondScreen",
+  "kind": "desktop",
+  "assets": [
+    {
+      "name": "SecondScreen-v{version}.exe"
+    }
+  ],
+  "notices": true,
+  "checksum_aliases": [
+    "SHA256SUMS"
+  ]
+}
